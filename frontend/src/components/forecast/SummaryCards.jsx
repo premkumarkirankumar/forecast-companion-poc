@@ -1,67 +1,114 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MONTHS } from "../../data/hub";
-
-import { useLocalStorageState } from "../../lib/forecast/storage";
-import { makeChange } from "../../lib/forecast/changelog";
-import { computeRollup } from "../../lib/forecast/contractors";
 
 import SectionHeader from "./SectionHeader";
 import MonthTable from "./MonthTable";
 import RollupTable from "./RollupTable";
-import ChangeLogPanel from "./ChangeLogPanel";
 import ExternalContractorsDetails from "./ExternalContractorsDetails";
 import ExternalSowDetails from "./ExternalSowDetails";
+import ChangeLogPanel from "./ChangeLogPanel";
 
 /* =========================================================
-   Placeholder month maps for Internal / Tools
-   (SOW placeholder removed as requested)
+   LocalStorage hook (per key)
 ========================================================= */
-function useEmptyMonthMaps(selectedProgram) {
-  return useMemo(() => {
-    const empty = Object.fromEntries(MONTHS.map((m) => [m, undefined]));
-    return {
-      internal: [{ label: "Internal", msByMonth: empty, nfByMonth: empty }],
-      tools: [{ label: "Tools & Services", msByMonth: empty, nfByMonth: empty }],
-    };
-  }, [selectedProgram]);
+function useLocalStorageState(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      // ignore
+    }
+  }, [key, state]);
+
+  return [state, setState];
 }
 
 /* =========================================================
-   MAIN EXPORT
+   Helpers
+========================================================= */
+function emptyMonthMap() {
+  // keep values undefined so UI shows "$—"
+  return Object.fromEntries(MONTHS.map((m) => [m, undefined]));
+}
+
+function computeRollup(items, kind) {
+  // kind: "contractors" | "sow"  (both have msByMonth/nfByMonth)
+  const msByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+  const nfByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+
+  for (const it of items || []) {
+    for (const m of MONTHS) {
+      msByMonth[m] += it.msByMonth?.[m] ?? 0;
+      nfByMonth[m] += it.nfByMonth?.[m] ?? 0;
+    }
+  }
+
+  return { msByMonth, nfByMonth };
+}
+
+/* =========================================================
+   Main
 ========================================================= */
 export default function SummaryCards({ selectedProgram }) {
-  const programKey = selectedProgram || "default";
+  // IMPORTANT: isolate EVERYTHING per program
+  const programKey = selectedProgram || "connected";
 
-  // Persist per program:
-  const contractorsKey = `pfc.${programKey}.contractors`;
-  const sowsKey = `pfc.${programKey}.sows`;
+  const contractorsKey = `pfc.${programKey}.external.contractors`;
+  const sowKey = `pfc.${programKey}.external.sow`;
   const changelogKey = `pfc.${programKey}.changelog`;
+  const actorKey = `pfc.actor`; // global name is fine
 
-  const [actor, setActor] = useLocalStorageState("pfc.actor", "Neo");
+  // UI state (per program)
+  const openKey = `pfc.${programKey}.ui.openSections`;
+  const externalTabKey = `pfc.${programKey}.ui.externalTab`; // total|details
+
+  const [actor, setActor] = useLocalStorageState(actorKey, "Neo");
+
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
-  const [sows, setSows] = useLocalStorageState(sowsKey, []);
+  const [sows, setSows] = useLocalStorageState(sowKey, []);
   const [changeLog, setChangeLog] = useLocalStorageState(changelogKey, []);
 
-  const [open, setOpen] = useState({
+  const [open, setOpen] = useLocalStorageState(openKey, {
     internal: true,
     tools: false,
     external: true,
   });
 
-  const [externalTab, setExternalTab] = useState("total"); // "total" | "details"
+  const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
 
-  const base = useEmptyMonthMaps(selectedProgram);
+  // placeholders (until you wire internal/tools to real data)
+  const internalRows = useMemo(
+    () => [{ label: "Internal", msByMonth: emptyMonthMap(), nfByMonth: emptyMonthMap() }],
+    [programKey]
+  );
+  const toolsRows = useMemo(
+    () => [{ label: "Tools & Services", msByMonth: emptyMonthMap(), nfByMonth: emptyMonthMap() }],
+    [programKey]
+  );
 
-  const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
-  const sowsRollup = useMemo(() => computeRollup(sows), [sows]);
+  const contractorsRollup = useMemo(
+    () => computeRollup(contractors, "contractors"),
+    [contractors]
+  );
+  const sowRollup = useMemo(() => computeRollup(sows, "sow"), [sows]);
 
   function logChange(payload) {
-    const entry = makeChange({
+    const entry = {
+      id: crypto.randomUUID(),
+      ts: new Date().toISOString(),
       actor,
       program: programKey,
       ...payload,
-    });
-
+    };
     setChangeLog((prev) => [entry, ...prev].slice(0, 300));
   }
 
@@ -72,11 +119,11 @@ export default function SummaryCards({ selectedProgram }) {
         title="Internal"
         subtitle="FTE forecast split by MS and NF"
         accent="blue"
-        isOpen={open.internal}
+        isOpen={!!open.internal}
         onToggle={() => setOpen((s) => ({ ...s, internal: !s.internal }))}
       />
       {open.internal ? (
-        <MonthTable title="Internal (MS / NF / Total)" rows={base.internal} />
+        <MonthTable title="Internal (MS / NF / Total)" rows={internalRows} />
       ) : null}
 
       {/* TOOLS */}
@@ -84,11 +131,11 @@ export default function SummaryCards({ selectedProgram }) {
         title="Tools & Services"
         subtitle="Tools & services forecast split by MS and NF"
         accent="purple"
-        isOpen={open.tools}
+        isOpen={!!open.tools}
         onToggle={() => setOpen((s) => ({ ...s, tools: !s.tools }))}
       />
       {open.tools ? (
-        <MonthTable title="Tools & Services (MS / NF / Total)" rows={base.tools} />
+        <MonthTable title="Tools & Services (MS / NF / Total)" rows={toolsRows} />
       ) : null}
 
       {/* EXTERNAL */}
@@ -96,13 +143,13 @@ export default function SummaryCards({ selectedProgram }) {
         title="External"
         subtitle="Contractors + SOW (tabs: Total vs Details)"
         accent="green"
-        isOpen={open.external}
+        isOpen={!!open.external}
         onToggle={() => setOpen((s) => ({ ...s, external: !s.external }))}
       />
 
       {open.external ? (
         <div className="space-y-4">
-          {/* Tabs */}
+          {/* External Tabs */}
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setExternalTab("total")}
@@ -131,7 +178,7 @@ export default function SummaryCards({ selectedProgram }) {
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <button
                 onClick={() => {
-                  if (confirm(`Clear saved contractors for ${programKey}?`)) setContractors([]);
+                  if (confirm(`Clear saved Contractors for ${programKey}?`)) setContractors([]);
                 }}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
               >
@@ -140,11 +187,11 @@ export default function SummaryCards({ selectedProgram }) {
 
               <button
                 onClick={() => {
-                  if (confirm(`Clear saved SOW items for ${programKey}?`)) setSows([]);
+                  if (confirm(`Clear saved SOWs for ${programKey}?`)) setSows([]);
                 }}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
               >
-                Reset SOW
+                Reset SOWs
               </button>
             </div>
           </div>
@@ -160,22 +207,30 @@ export default function SummaryCards({ selectedProgram }) {
 
               <RollupTable
                 title="External — SOW (roll-up from details)"
-                msByMonth={sowsRollup.msByMonth}
-                nfByMonth={sowsRollup.nfByMonth}
+                msByMonth={sowRollup.msByMonth}
+                nfByMonth={sowRollup.nfByMonth}
               />
             </div>
           ) : (
             /* DETAILS TAB */
             <div className="space-y-4">
+              {/* Contractors Details (accordion cards inside; state saved per program inside that component) */}
               <ExternalContractorsDetails
+                programKey={programKey}
                 contractors={contractors}
                 setContractors={setContractors}
                 onLog={logChange}
               />
 
-              <ExternalSowDetails sows={sows} setSows={setSows} onLog={logChange} />
+              {/* SOW Details (accordion cards inside; state saved per program inside that component) */}
+              <ExternalSowDetails
+                programKey={programKey}
+                sows={sows}
+                setSows={setSows}
+                onLog={logChange}
+              />
 
-              {/* Change Log ONLY here (Details tab) */}
+              {/* Change Log ONLY on Details tab */}
               <ChangeLogPanel
                 programKey={programKey}
                 actor={actor}
