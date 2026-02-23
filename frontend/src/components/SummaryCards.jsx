@@ -1,7 +1,33 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { MONTHS } from "../data/hub";
 
-// ---------- formatting ----------
+/* =========================================================
+   LocalStorage hook (simple, reliable)
+========================================================= */
+function useLocalStorageState(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      // ignore
+    }
+  }, [key, state]);
+
+  return [state, setState];
+}
+
+/* =========================================================
+   Helpers
+========================================================= */
 function fmt(value) {
   if (value === null || value === undefined) return "$—";
   return new Intl.NumberFormat("en-US", {
@@ -17,12 +43,69 @@ function clampPct(n) {
   return Math.max(0, Math.min(100, x));
 }
 
-function monthCellBorder(i) {
-  // Vertical divider between months
-  // Keep it subtle, but visible.
-  return i === 0 ? "" : "border-l border-gray-100";
+function monthDividerClass(m) {
+  const isQuarterStart = m === "Apr" || m === "Jul" || m === "Oct";
+  const base = m === "Jan" ? "" : "border-l border-gray-100";
+  const quarter = isQuarterStart ? " border-l-2 border-gray-200" : "";
+  return (base + quarter).trim();
 }
 
+function headCellClass(m) {
+  return [
+    "px-3 py-3 text-right font-medium whitespace-nowrap",
+    monthDividerClass(m),
+  ].join(" ");
+}
+
+function bodyCellClass(m) {
+  return ["px-2 py-3 align-top", monthDividerClass(m)].join(" ");
+}
+
+function distributeEvenly(total, lockedByMonth) {
+  const lockedSum = MONTHS.reduce((a, m) => a + (lockedByMonth[m] ?? 0), 0);
+  const remaining = Math.max(0, total - lockedSum);
+
+  const unlockedMonths = MONTHS.filter((m) => lockedByMonth[m] === undefined);
+  const per = unlockedMonths.length ? remaining / unlockedMonths.length : 0;
+
+  const out = {};
+  for (const m of MONTHS) {
+    out[m] = lockedByMonth[m] === undefined ? per : lockedByMonth[m];
+  }
+  return out;
+}
+
+function makeChange({
+  actor = "Neo",
+  program,
+  action,
+  entityType,
+  entityId,
+  entityName,
+  field,
+  from,
+  to,
+  meta,
+}) {
+  return {
+    id: crypto.randomUUID(),
+    ts: new Date().toISOString(),
+    actor,
+    program,
+    action,
+    entityType,
+    entityId,
+    entityName,
+    field,
+    from,
+    to,
+    meta: meta ?? {},
+  };
+}
+
+/* =========================================================
+   Section Header
+========================================================= */
 function SectionHeader({ title, subtitle, accent, isOpen, onToggle }) {
   const accentMap = {
     blue: "border-blue-200 bg-blue-50 text-blue-900",
@@ -57,34 +140,30 @@ function SectionHeader({ title, subtitle, accent, isOpen, onToggle }) {
   );
 }
 
-// ---------- MonthTable: stacked MS/NF/Total per month (for internal/tools) ----------
+/* =========================================================
+   MonthTable (stacked MS/NF/Total per month) - placeholder blocks
+========================================================= */
 function MonthTable({ title, rows }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/70 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
         <div className="text-sm font-semibold text-gray-900">{title}</div>
         <div className="text-xs text-gray-500">Jan–Dec view</div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-[1500px] w-full border-collapse">
+        <table className="min-w-[1400px] w-full border-collapse">
           <thead>
             <tr className="text-xs text-gray-600">
-              <th className="sticky left-0 z-10 bg-white px-4 py-3 text-left font-medium">
+              <th className="sticky left-0 z-10 bg-white px-5 py-3 text-left font-medium">
                 Category
               </th>
-              {MONTHS.map((m, i) => (
-                <th
-                  key={m}
-                  className={[
-                    "px-3 py-3 text-right font-medium",
-                    monthCellBorder(i),
-                  ].join(" ")}
-                >
+              {MONTHS.map((m) => (
+                <th key={m} className={headCellClass(m)}>
                   {m}
                 </th>
               ))}
-              <th className="px-4 py-3 text-right font-medium">Year</th>
+              <th className="px-5 py-3 text-right font-medium">Year</th>
             </tr>
           </thead>
 
@@ -96,28 +175,22 @@ function MonthTable({ title, rows }) {
 
               return (
                 <tr key={r.label} className="border-t border-gray-100">
-                  <td className="sticky left-0 z-10 bg-white px-4 py-3 align-top">
+                  <td className="sticky left-0 z-10 bg-white px-5 py-4 align-top">
                     <div className="text-sm font-semibold text-gray-900">{r.label}</div>
-                    <div className="mt-2 space-y-1">
+                    <div className="mt-3 space-y-1">
                       <div className="text-xs font-medium text-gray-600">MS</div>
                       <div className="text-xs font-medium text-gray-600">NF</div>
                       <div className="text-xs font-medium text-gray-600">Total</div>
                     </div>
                   </td>
 
-                  {MONTHS.map((m, i) => {
+                  {MONTHS.map((m) => {
                     const ms = r.msByMonth?.[m];
                     const nf = r.nfByMonth?.[m];
                     const total = (ms ?? 0) + (nf ?? 0);
 
                     return (
-                      <td
-                        key={m}
-                        className={[
-                          "px-3 py-3 align-top text-right",
-                          monthCellBorder(i),
-                        ].join(" ")}
-                      >
+                      <td key={m} className={["text-right", bodyCellClass(m)].join(" ")}>
                         <div className="space-y-1">
                           <div className="text-sm font-semibold text-gray-900 tabular-nums">
                             {fmt(ms)}
@@ -133,7 +206,7 @@ function MonthTable({ title, rows }) {
                     );
                   })}
 
-                  <td className="px-4 py-3 align-top text-right">
+                  <td className="px-5 py-4 align-top text-right">
                     <div className="space-y-1">
                       <div className="text-sm font-semibold tabular-nums">{fmt(msYear)}</div>
                       <div className="text-sm font-semibold tabular-nums">{fmt(nfYear)}</div>
@@ -150,22 +223,9 @@ function MonthTable({ title, rows }) {
   );
 }
 
-// ---------- helpers for contractors auto-rebalance ----------
-function distributeEvenly(total, lockedByMonth) {
-  const lockedSum = MONTHS.reduce((a, m) => a + (lockedByMonth[m] ?? 0), 0);
-  const remaining = Math.max(0, total - lockedSum);
-
-  const unlockedMonths = MONTHS.filter((m) => lockedByMonth[m] === undefined);
-  const per = unlockedMonths.length ? remaining / unlockedMonths.length : 0;
-
-  const out = {};
-  for (const m of MONTHS) {
-    out[m] = lockedByMonth[m] === undefined ? per : lockedByMonth[m];
-  }
-  return out;
-}
-
-// ---------- External Total contractors rollup table (aligned) ----------
+/* =========================================================
+   External Total Rollup Table (Contractors MS / NF / Total)
+========================================================= */
 function RollupTable({ title, msByMonth, nfByMonth }) {
   const totalByMonth = Object.fromEntries(
     MONTHS.map((m) => [m, (msByMonth?.[m] ?? 0) + (nfByMonth?.[m] ?? 0)])
@@ -176,30 +236,30 @@ function RollupTable({ title, msByMonth, nfByMonth }) {
   const totalYear = msYear + nfYear;
 
   function Row({ label, map, year, tone }) {
-    const toneMap = {
-      ms: "text-blue-700",
-      nf: "text-purple-700",
-      total: "text-gray-900",
-    };
+    const toneCls =
+      tone === "ms"
+        ? "bg-blue-50/60"
+        : tone === "nf"
+        ? "bg-purple-50/60"
+        : "bg-gray-50/60";
 
     return (
-      <tr className="border-t border-gray-100">
-        <td className="sticky left-0 bg-white px-4 py-3 text-sm font-semibold text-gray-900">
+      <tr className={["border-t border-gray-100", toneCls].join(" ")}>
+        <td className="sticky left-0 bg-white px-5 py-3 text-sm font-semibold text-gray-900">
           {label}
         </td>
-        {MONTHS.map((m, i) => (
+        {MONTHS.map((m) => (
           <td
             key={m}
             className={[
-              "px-2 py-3 text-right text-sm font-semibold tabular-nums",
-              monthCellBorder(i),
-              toneMap[tone] ?? "",
+              "px-2 py-3 text-right text-sm font-semibold tabular-nums whitespace-nowrap",
+              monthDividerClass(m),
             ].join(" ")}
           >
-            {fmt(map?.[m])}
+            {fmt(map?.[m] ?? 0)}
           </td>
         ))}
-        <td className={["px-4 py-3 text-right text-sm font-semibold tabular-nums", toneMap[tone] ?? ""].join(" ")}>
+        <td className="px-5 py-3 text-right text-sm font-semibold tabular-nums">
           {fmt(year)}
         </td>
       </tr>
@@ -208,22 +268,24 @@ function RollupTable({ title, msByMonth, nfByMonth }) {
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/70 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
         <div className="text-sm font-semibold text-gray-900">{title}</div>
         <div className="text-xs text-gray-500">Jan–Dec view</div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-[1500px] w-full border-collapse">
+        <table className="min-w-[1400px] w-full border-collapse">
           <thead>
             <tr className="text-xs text-gray-600">
-              <th className="sticky left-0 bg-white px-4 py-3 text-left font-medium">Category</th>
-              {MONTHS.map((m, i) => (
-                <th key={m} className={["px-2 py-3 text-right font-medium", monthCellBorder(i)].join(" ")}>
+              <th className="sticky left-0 bg-white px-5 py-3 text-left font-medium">
+                Category
+              </th>
+              {MONTHS.map((m) => (
+                <th key={m} className={headCellClass(m)}>
                   {m}
                 </th>
               ))}
-              <th className="px-4 py-3 text-right font-medium">Year</th>
+              <th className="px-5 py-3 text-right font-medium">Year</th>
             </tr>
           </thead>
 
@@ -238,8 +300,14 @@ function RollupTable({ title, msByMonth, nfByMonth }) {
   );
 }
 
-// ---------- Contractors Details component ----------
-function ExternalContractorsDetails({ contractors, setContractors }) {
+/* =========================================================
+   External Contractors Details (rich UI + edits + rebalance)
+========================================================= */
+function ExternalContractorsDetails({
+  contractors,
+  setContractors,
+  onLog,
+}) {
   const [draft, setDraft] = useState({
     name: "",
     ratePerHour: "",
@@ -260,10 +328,6 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
 
   function hasValue(v) {
     return String(v ?? "").trim().length > 0;
-  }
-
-  function calcYearFromInputs() {
-    return num(draft.ratePerHour) * num(draft.hoursPerWeek) * num(draft.weeksPerYear);
   }
 
   function normalizeSplit(msPct, nfPct) {
@@ -301,15 +365,14 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
   function addContractor() {
     if (!canAdd) return;
 
-    const baseYear = calcYearFromInputs();
+    const baseYear =
+      num(draft.ratePerHour) * num(draft.hoursPerWeek) * num(draft.weeksPerYear);
+
     const split = normalizeSplit(draft.msPct, draft.nfPct);
 
-    const yearTarget = baseYear;
+    const yearTarget = baseYear; // editable later
     const msYear = yearTarget * (split.msPct / 100);
     const nfYear = yearTarget * (split.nfPct / 100);
-
-    const msByMonth = distributeEvenly(msYear, {});
-    const nfByMonth = distributeEvenly(nfYear, {});
 
     const newItem = {
       id: crypto.randomUUID(),
@@ -324,14 +387,29 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
 
       yearTargetTotal: yearTarget,
 
-      msByMonth,
-      nfByMonth,
+      msByMonth: distributeEvenly(msYear, {}),
+      nfByMonth: distributeEvenly(nfYear, {}),
 
       msLocked: {},
       nfLocked: {},
     };
 
     setContractors((arr) => [newItem, ...arr]);
+
+    onLog?.({
+      action: "ADD_CONTRACTOR",
+      entityType: "contractor",
+      entityId: newItem.id,
+      entityName: newItem.name,
+      meta: {
+        ratePerHour: newItem.ratePerHour,
+        hoursPerWeek: newItem.hoursPerWeek,
+        weeksPerYear: newItem.weeksPerYear,
+        msPct: newItem.msPct,
+        nfPct: newItem.nfPct,
+        yearTargetTotal: newItem.yearTargetTotal,
+      },
+    });
 
     setDraft({
       name: "",
@@ -344,25 +422,83 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
   }
 
   function removeContractor(id) {
+    const existing = contractors.find((c) => c.id === id);
+    onLog?.({
+      action: "REMOVE_CONTRACTOR",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+    });
     setContractors((arr) => arr.filter((c) => c.id !== id));
   }
 
+  function updateName(id, name) {
+    const existing = contractors.find((c) => c.id === id);
+    updateContractor(id, (c) => ({ ...c, name }));
+    onLog?.({
+      action: "UPDATE_CONTRACTOR_NAME",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "name",
+      from: existing?.name,
+      to: name,
+    });
+  }
+
   function updateSplit(id, msPct, nfPct) {
+    const existing = contractors.find((c) => c.id === id);
     updateContractor(id, (c) => {
       const split = normalizeSplit(msPct, nfPct);
-      return recomputeFromYearTarget({ ...c, ...split });
+      const next = { ...c, ...split };
+      return recomputeFromYearTarget(next);
+    });
+
+    onLog?.({
+      action: "UPDATE_SPLIT",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "split",
+      meta: { msPct, nfPct },
     });
   }
 
   function setYearTarget(id, value) {
     const v = Number(value);
     const val = Number.isFinite(v) ? v : 0;
+
+    const existing = contractors.find((c) => c.id === id);
+    onLog?.({
+      action: "UPDATE_YEAR_TARGET",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "yearTargetTotal",
+      from: existing?.yearTargetTotal,
+      to: val,
+    });
+
     updateContractor(id, (c) => recomputeFromYearTarget({ ...c, yearTargetTotal: val }));
   }
 
   function setMonthValue(id, kind, month, value) {
     const v = Number(value);
     const val = Number.isFinite(v) ? v : 0;
+
+    const existing = contractors.find((c) => c.id === id);
+    const from =
+      kind === "ms" ? existing?.msLocked?.[month] : existing?.nfLocked?.[month];
+
+    onLog?.({
+      action: kind === "ms" ? "EDIT_MS_MONTH" : "EDIT_NF_MONTH",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: `${kind}.${month}`,
+      from,
+      to: val,
+    });
 
     updateContractor(id, (c) => {
       const lockedKey = kind === "ms" ? "msLocked" : "nfLocked";
@@ -372,33 +508,40 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
   }
 
   function regenerateFromRateHoursWeeks(id) {
+    const existing = contractors.find((c) => c.id === id);
+    onLog?.({
+      action: "REGENERATE",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+    });
+
     updateContractor(id, (c) => {
       const baseYear = c.ratePerHour * c.hoursPerWeek * c.weeksPerYear;
-      const resetLocks = { ...c, yearTargetTotal: baseYear, msLocked: {}, nfLocked: {} };
-      return recomputeFromYearTarget(resetLocks);
+      const reset = { ...c, yearTargetTotal: baseYear, msLocked: {}, nfLocked: {} };
+      return recomputeFromYearTarget(reset);
     });
   }
 
-  function updateName(id, name) {
-    updateContractor(id, (c) => ({ ...c, name }));
-  }
-
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-semibold text-gray-900">External Details — Contractors</div>
+          <div className="text-sm font-semibold text-gray-900">
+            External Details — Contractors
+          </div>
           <div className="mt-1 text-xs text-gray-600">
-            Add contractors → set yearly target → edit MS/NF by month (auto-rebalances remaining months).
+            Add contractors → set yearly target → edit MS/NF by month (auto rebalances remaining months).
           </div>
         </div>
-        <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-700">
-          Detail View
-        </span>
+
+        <div className="hidden sm:flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600 ring-1 ring-gray-100">
+          Quarter separators at Apr / Jul / Oct
+        </div>
       </div>
 
       {/* Add contractor form */}
-      <div className="mt-4 grid gap-3 rounded-2xl bg-gray-50 p-4 ring-1 ring-gray-100 lg:grid-cols-12">
+      <div className="mt-5 grid gap-3 rounded-2xl bg-gray-50 p-4 ring-1 ring-gray-100 lg:grid-cols-12">
         <div className="lg:col-span-3">
           <label className="text-xs font-medium text-gray-600">Contractor Name</label>
           <input
@@ -480,8 +623,8 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
         </div>
       </div>
 
-      {/* Contractor list */}
-      <div className="mt-4 space-y-4">
+      {/* Contractor cards */}
+      <div className="mt-5 space-y-4">
         {contractors.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-sm text-gray-600">
             No contractors added yet.
@@ -493,12 +636,12 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
             const totalYear = msYear + nfYear;
 
             return (
-              <div key={c.id} className="rounded-2xl border border-gray-200 bg-white">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-4 py-3">
-                  <div className="min-w-[260px]">
-                    <label className="text-[11px] font-medium text-gray-500">Contractor Name</label>
+              <div key={c.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                  <div className="w-full sm:w-auto">
+                    <div className="text-xs font-medium text-gray-600">Contractor Name (editable)</div>
                     <input
-                      className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-200"
+                      className="mt-1 w-full sm:w-[360px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-200"
                       value={c.name}
                       onChange={(e) => updateName(c.id, e.target.value)}
                     />
@@ -525,28 +668,22 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
                   </div>
                 </div>
 
-                {/* Inputs + Year target */}
-                <div className="grid gap-3 px-4 py-4 md:grid-cols-7">
+                {/* Inputs row */}
+                <div className="grid gap-3 px-5 py-4 md:grid-cols-7">
                   <SmallField
                     label="Rate/hr"
                     value={c.ratePerHour}
-                    onChange={(v) =>
-                      updateContractor(c.id, (x) => ({ ...x, ratePerHour: v }))
-                    }
+                    onChange={(v) => updateContractor(c.id, (x) => ({ ...x, ratePerHour: v }))}
                   />
                   <SmallField
                     label="Hours/week"
                     value={c.hoursPerWeek}
-                    onChange={(v) =>
-                      updateContractor(c.id, (x) => ({ ...x, hoursPerWeek: v }))
-                    }
+                    onChange={(v) => updateContractor(c.id, (x) => ({ ...x, hoursPerWeek: v }))}
                   />
                   <SmallField
                     label="Weeks/year"
                     value={c.weeksPerYear}
-                    onChange={(v) =>
-                      updateContractor(c.id, (x) => ({ ...x, weeksPerYear: v }))
-                    }
+                    onChange={(v) => updateContractor(c.id, (x) => ({ ...x, weeksPerYear: v }))}
                   />
                   <SmallField
                     label="MS %"
@@ -577,80 +714,93 @@ function ExternalContractorsDetails({ contractors, setContractors }) {
                   </div>
                 </div>
 
-                {/* Editable monthly MS/NF; Total computed */}
+                {/* Monthly grid */}
                 <div className="overflow-x-auto border-t border-gray-100">
-                  <table className="min-w-[1500px] w-full border-collapse">
+                  <table className="min-w-[1550px] w-full border-collapse">
                     <thead>
                       <tr className="text-xs text-gray-600">
-                        <th className="sticky left-0 bg-white px-4 py-3 text-left font-medium">
+                        <th className="sticky left-0 bg-white px-5 py-3 text-left font-medium">
                           Month
                         </th>
-                        {MONTHS.map((m, i) => (
-                          <th
-                            key={m}
-                            className={[
-                              "px-2 py-3 text-right font-medium",
-                              monthCellBorder(i),
-                            ].join(" ")}
-                          >
+                        {MONTHS.map((m) => (
+                          <th key={m} className={headCellClass(m)}>
                             {m}
                           </th>
                         ))}
-                        <th className="px-4 py-3 text-right font-medium">Year</th>
+                        <th className="px-5 py-3 text-right font-medium">Year</th>
                       </tr>
                     </thead>
 
                     <tbody>
-                      <tr className="border-t border-gray-100">
-                        <td className="sticky left-0 bg-white px-4 py-3 text-sm font-semibold text-blue-800">
+                      {/* MS */}
+                      <tr className="border-t border-gray-100 bg-blue-50/50">
+                        <td className="sticky left-0 bg-white px-5 py-4 text-sm font-semibold text-gray-900">
                           MS (editable)
                         </td>
-                        {MONTHS.map((m, i) => (
-                          <td key={m} className={["px-2 py-3", monthCellBorder(i)].join(" ")}>
-                            <BigMoneyInput
+                        {MONTHS.map((m) => (
+                          <td key={m} className={bodyCellClass(m)}>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              className={[
+                                "w-full min-w-[140px]", // bigger to avoid cut numbers
+                                "rounded-xl border border-gray-200 bg-white",
+                                "px-3 py-2 text-right text-sm font-semibold tabular-nums",
+                                "outline-none focus:ring-2 focus:ring-gray-200",
+                              ].join(" ")}
                               value={Math.round(c.msByMonth?.[m] ?? 0)}
-                              onChange={(val) => setMonthValue(c.id, "ms", m, val)}
+                              onChange={(e) => setMonthValue(c.id, "ms", m, e.target.value)}
                             />
                           </td>
                         ))}
-                        <td className="px-4 py-3 text-right text-sm font-semibold text-blue-800 tabular-nums">
+                        <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-gray-900">
                           {fmt(msYear)}
                         </td>
                       </tr>
 
-                      <tr className="border-t border-gray-100">
-                        <td className="sticky left-0 bg-white px-4 py-3 text-sm font-semibold text-purple-800">
+                      {/* NF */}
+                      <tr className="border-t border-gray-100 bg-purple-50/50">
+                        <td className="sticky left-0 bg-white px-5 py-4 text-sm font-semibold text-gray-900">
                           NF (editable)
                         </td>
-                        {MONTHS.map((m, i) => (
-                          <td key={m} className={["px-2 py-3", monthCellBorder(i)].join(" ")}>
-                            <BigMoneyInput
+                        {MONTHS.map((m) => (
+                          <td key={m} className={bodyCellClass(m)}>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              className={[
+                                "w-full min-w-[140px]",
+                                "rounded-xl border border-gray-200 bg-white",
+                                "px-3 py-2 text-right text-sm font-semibold tabular-nums",
+                                "outline-none focus:ring-2 focus:ring-gray-200",
+                              ].join(" ")}
                               value={Math.round(c.nfByMonth?.[m] ?? 0)}
-                              onChange={(val) => setMonthValue(c.id, "nf", m, val)}
+                              onChange={(e) => setMonthValue(c.id, "nf", m, e.target.value)}
                             />
                           </td>
                         ))}
-                        <td className="px-4 py-3 text-right text-sm font-semibold text-purple-800 tabular-nums">
+                        <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-gray-900">
                           {fmt(nfYear)}
                         </td>
                       </tr>
 
-                      <tr className="border-t border-gray-100 bg-gray-50/40 text-gray-900">
-                        <td className="sticky left-0 bg-gray-50/40 px-4 py-3 text-sm font-semibold">
+                      {/* Total calc */}
+                      <tr className="border-t border-gray-100 bg-gray-50/60">
+                        <td className="sticky left-0 bg-white px-5 py-4 text-sm font-semibold text-gray-900">
                           Total (calc)
                         </td>
-                        {MONTHS.map((m, i) => (
+                        {MONTHS.map((m) => (
                           <td
                             key={m}
                             className={[
-                              "px-2 py-3 text-right text-sm font-semibold tabular-nums",
-                              monthCellBorder(i),
+                              "px-3 py-4 text-right text-sm font-semibold tabular-nums text-gray-900 whitespace-nowrap",
+                              monthDividerClass(m),
                             ].join(" ")}
                           >
                             {fmt((c.msByMonth?.[m] ?? 0) + (c.nfByMonth?.[m] ?? 0))}
                           </td>
                         ))}
-                        <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums">
+                        <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-gray-900">
                           {fmt(totalYear)}
                         </td>
                       </tr>
@@ -680,34 +830,20 @@ function SmallField({ label, value, onChange }) {
   );
 }
 
-function BigMoneyInput({ value, onChange }) {
-  return (
-    <input
-      type="number"
-      className={[
-        "w-full min-w-[92px]", // IMPORTANT: makes the boxes wide enough per month
-        "rounded-xl border border-gray-200 bg-white px-3 py-2",
-        "text-right text-sm font-semibold tabular-nums",
-        "outline-none focus:ring-2 focus:ring-gray-200",
-      ].join(" ")}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
-
-// ---------- placeholder data for internal/tools ----------
+/* =========================================================
+   Placeholder month maps for Internal / Tools / SOW
+========================================================= */
 function useEmptyMonthMaps(selectedProgram) {
   return useMemo(() => {
     const empty = Object.fromEntries(MONTHS.map((m) => [m, undefined]));
     return {
       internal: [{ label: "Internal", msByMonth: empty, nfByMonth: empty }],
       tools: [{ label: "Tools & Services", msByMonth: empty, nfByMonth: empty }],
+      sow: [{ label: "SOW", msByMonth: empty, nfByMonth: empty }],
     };
   }, [selectedProgram]);
 }
 
-// ---------- rollup from contractors (MS/NF are primary editable sources) ----------
 function computeContractorRollup(contractors) {
   const msByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
   const nfByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
@@ -722,7 +858,20 @@ function computeContractorRollup(contractors) {
   return { msByMonth, nfByMonth };
 }
 
+/* =========================================================
+   MAIN EXPORT
+========================================================= */
 export default function SummaryCards({ selectedProgram }) {
+  const programKey = selectedProgram || "default";
+
+  // Persist per program:
+  const contractorsKey = `pfc.${programKey}.contractors`;
+  const changelogKey = `pfc.${programKey}.changelog`;
+
+  const [actor, setActor] = useLocalStorageState("pfc.actor", "Neo");
+  const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
+  const [changeLog, setChangeLog] = useLocalStorageState(changelogKey, []);
+
   const [open, setOpen] = useState({
     internal: true,
     tools: false,
@@ -731,9 +880,6 @@ export default function SummaryCards({ selectedProgram }) {
 
   const [externalTab, setExternalTab] = useState("total"); // "total" | "details"
 
-  // POC: in-memory only (we can add localStorage + changelog next)
-  const [contractors, setContractors] = useState([]);
-
   const base = useEmptyMonthMaps(selectedProgram);
 
   const contractorsRollup = useMemo(
@@ -741,11 +887,18 @@ export default function SummaryCards({ selectedProgram }) {
     [contractors]
   );
 
-  // SOW placeholder
-  const emptySow = useMemo(() => Object.fromEntries(MONTHS.map((m) => [m, undefined])), []);
+  function logChange(payload) {
+    const entry = makeChange({
+      actor,
+      program: programKey,
+      ...payload,
+    });
+
+    setChangeLog((prev) => [entry, ...prev].slice(0, 300));
+  }
 
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mx-auto mt-6 w-full max-w-[1700px] space-y-4 px-2 sm:px-4">
       {/* INTERNAL */}
       <SectionHeader
         title="Internal"
@@ -754,7 +907,9 @@ export default function SummaryCards({ selectedProgram }) {
         isOpen={open.internal}
         onToggle={() => setOpen((s) => ({ ...s, internal: !s.internal }))}
       />
-      {open.internal ? <MonthTable title="Internal (MS / NF / Total)" rows={base.internal} /> : null}
+      {open.internal ? (
+        <MonthTable title="Internal (MS / NF / Total)" rows={base.internal} />
+      ) : null}
 
       {/* TOOLS */}
       <SectionHeader
@@ -764,7 +919,9 @@ export default function SummaryCards({ selectedProgram }) {
         isOpen={open.tools}
         onToggle={() => setOpen((s) => ({ ...s, tools: !s.tools }))}
       />
-      {open.tools ? <MonthTable title="Tools & Services (MS / NF / Total)" rows={base.tools} /> : null}
+      {open.tools ? (
+        <MonthTable title="Tools & Services (MS / NF / Total)" rows={base.tools} />
+      ) : null}
 
       {/* EXTERNAL */}
       <SectionHeader
@@ -802,8 +959,21 @@ export default function SummaryCards({ selectedProgram }) {
             >
               External Details
             </button>
+
+            {/* Reset data (contractors only) */}
+            <button
+              onClick={() => {
+                if (confirm(`Clear saved contractors for ${programKey}?`)) {
+                  setContractors([]);
+                }
+              }}
+              className="ml-auto rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+            >
+              Reset Contractors
+            </button>
           </div>
 
+          {/* TOTAL TAB */}
           {externalTab === "total" ? (
             <div className="space-y-4">
               <RollupTable
@@ -814,14 +984,70 @@ export default function SummaryCards({ selectedProgram }) {
 
               <MonthTable
                 title="External — SOW (placeholder for now)"
-                rows={[{ label: "SOW", msByMonth: emptySow, nfByMonth: emptySow }]}
+                rows={base.sow}
               />
             </div>
           ) : (
-            <ExternalContractorsDetails
-              contractors={contractors}
-              setContractors={setContractors}
-            />
+            /* DETAILS TAB */
+            <div className="space-y-4">
+              <ExternalContractorsDetails
+                contractors={contractors}
+                setContractors={setContractors}
+                onLog={logChange}
+              />
+
+              {/* Change Log ONLY here (Details tab) */}
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-gray-900">Change Log</div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                      value={actor}
+                      onChange={(e) => setActor(e.target.value)}
+                      placeholder="Your name"
+                    />
+                    <button
+                      onClick={() => {
+                        if (confirm(`Clear change log for ${programKey}?`)) setChangeLog([]);
+                      }}
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                    >
+                      Clear Log
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-gray-100">
+                  {changeLog.length === 0 ? (
+                    <div className="p-3 text-sm text-gray-600">No changes recorded yet.</div>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {changeLog.slice(0, 60).map((c) => (
+                        <li key={c.id} className="p-3 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-medium text-gray-900">
+                              {c.actor} • {c.action}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(c.ts).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="mt-1 text-xs text-gray-600">
+                            {c.entityType}:{c.entityName || c.entityId}
+                            {c.field ? ` • ${c.field}` : ""}
+                            {c.from !== undefined || c.to !== undefined
+                              ? ` • ${String(c.from)} → ${String(c.to)}`
+                              : ""}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       ) : null}
