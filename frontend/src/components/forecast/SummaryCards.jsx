@@ -3,16 +3,18 @@ import { MONTHS } from "../../data/hub";
 
 import { useLocalStorageState } from "../../lib/forecast/storage";
 import { makeChange } from "../../lib/forecast/changelog";
-import { computeContractorRollup } from "../../lib/forecast/contractors";
+import { computeRollup } from "../../lib/forecast/contractors";
 
 import SectionHeader from "./SectionHeader";
 import MonthTable from "./MonthTable";
 import RollupTable from "./RollupTable";
 import ChangeLogPanel from "./ChangeLogPanel";
 import ExternalContractorsDetails from "./ExternalContractorsDetails";
+import ExternalSowDetails from "./ExternalSowDetails";
 
 /* =========================================================
-   Placeholder month maps for Internal / Tools / SOW
+   Placeholder month maps for Internal / Tools
+   (SOW placeholder removed as requested)
 ========================================================= */
 function useEmptyMonthMaps(selectedProgram) {
   return useMemo(() => {
@@ -20,7 +22,6 @@ function useEmptyMonthMaps(selectedProgram) {
     return {
       internal: [{ label: "Internal", msByMonth: empty, nfByMonth: empty }],
       tools: [{ label: "Tools & Services", msByMonth: empty, nfByMonth: empty }],
-      sow: [{ label: "SOW", msByMonth: empty, nfByMonth: empty }],
     };
   }, [selectedProgram]);
 }
@@ -33,10 +34,12 @@ export default function SummaryCards({ selectedProgram }) {
 
   // Persist per program:
   const contractorsKey = `pfc.${programKey}.contractors`;
+  const sowsKey = `pfc.${programKey}.sows`;
   const changelogKey = `pfc.${programKey}.changelog`;
 
   const [actor, setActor] = useLocalStorageState("pfc.actor", "Neo");
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
+  const [sows, setSows] = useLocalStorageState(sowsKey, []);
   const [changeLog, setChangeLog] = useLocalStorageState(changelogKey, []);
 
   const [open, setOpen] = useState({
@@ -49,10 +52,8 @@ export default function SummaryCards({ selectedProgram }) {
 
   const base = useEmptyMonthMaps(selectedProgram);
 
-  const contractorsRollup = useMemo(
-    () => computeContractorRollup(contractors),
-    [contractors]
-  );
+  const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
+  const sowsRollup = useMemo(() => computeRollup(sows), [sows]);
 
   function logChange(payload) {
     const entry = makeChange({
@@ -102,7 +103,7 @@ export default function SummaryCards({ selectedProgram }) {
       {open.external ? (
         <div className="space-y-4">
           {/* Tabs */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setExternalTab("total")}
               className={[
@@ -127,17 +128,25 @@ export default function SummaryCards({ selectedProgram }) {
               External Details
             </button>
 
-            {/* Reset data (contractors only) */}
-            <button
-              onClick={() => {
-                if (confirm(`Clear saved contractors for ${programKey}?`)) {
-                  setContractors([]);
-                }
-              }}
-              className="ml-auto rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-            >
-              Reset Contractors
-            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  if (confirm(`Clear saved contractors for ${programKey}?`)) setContractors([]);
+                }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Reset Contractors
+              </button>
+
+              <button
+                onClick={() => {
+                  if (confirm(`Clear saved SOW items for ${programKey}?`)) setSows([]);
+                }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Reset SOW
+              </button>
+            </div>
           </div>
 
           {/* TOTAL TAB */}
@@ -149,7 +158,11 @@ export default function SummaryCards({ selectedProgram }) {
                 nfByMonth={contractorsRollup.nfByMonth}
               />
 
-              <MonthTable title="External — SOW (placeholder for now)" rows={base.sow} />
+              <RollupTable
+                title="External — SOW (roll-up from details)"
+                msByMonth={sowsRollup.msByMonth}
+                nfByMonth={sowsRollup.nfByMonth}
+              />
             </div>
           ) : (
             /* DETAILS TAB */
@@ -159,6 +172,8 @@ export default function SummaryCards({ selectedProgram }) {
                 setContractors={setContractors}
                 onLog={logChange}
               />
+
+              <ExternalSowDetails sows={sows} setSows={setSows} onLog={logChange} />
 
               {/* Change Log ONLY here (Details tab) */}
               <ChangeLogPanel

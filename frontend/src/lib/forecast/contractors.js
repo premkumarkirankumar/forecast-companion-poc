@@ -24,16 +24,26 @@ export function normalizeSplit(msPct, nfPct) {
   return { msPct: msN, nfPct: 100 - msN };
 }
 
-export function computeContractorRollup(contractors) {
+/**
+ * Generic rollup for any item list that has:
+ * - msByMonth: { Jan: number, ... }
+ * - nfByMonth: { Jan: number, ... }
+ */
+export function computeRollup(items) {
   const msByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
   const nfByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
 
-  for (const c of contractors || []) {
+  for (const it of items || []) {
     for (const m of MONTHS) {
-      msByMonth[m] += c.msByMonth?.[m] ?? 0;
-      nfByMonth[m] += c.nfByMonth?.[m] ?? 0;
+      msByMonth[m] += it.msByMonth?.[m] ?? 0;
+      nfByMonth[m] += it.nfByMonth?.[m] ?? 0;
     }
   }
 
   return { msByMonth, nfByMonth };
+}
+
+// Backwards compatibility (if you used this name elsewhere)
+export function computeContractorRollup(contractors) {
+  return computeRollup(contractors);
 }
