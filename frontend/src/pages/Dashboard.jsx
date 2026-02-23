@@ -20,10 +20,10 @@ export default function Dashboard({
         setSelectedMonth={setSelectedMonth}
       />
 
+      {/* IMPORTANT: pass selectedProgram so localStorage is per-program */}
       <SummaryCards selectedProgram={selectedProgram} />
 
-      {/* Trend chart reads saved contractors per program */}
-      <ChartPlaceholder selectedProgram={selectedProgram} />
+      <ChartPlaceholder />
     </div>
   );
 }
