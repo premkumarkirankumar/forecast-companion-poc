@@ -1,0 +1,19 @@
+{
+  "name": "forecast-companion-poc",
+  "version": "1.0.0",
+  "description": "A lightweight internal forecasting dashboard for DM's to track forecast spend by program/category/month. This is a forecast companion tool (not finance actuals).",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+  "dev": "concurrently \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\""
+ },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
