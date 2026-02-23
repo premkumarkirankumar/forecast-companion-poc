@@ -12,14 +12,18 @@ export default function Dashboard({
   return (
     <div>
       <TopBar />
+
       <Selectors
         selectedProgram={selectedProgram}
         setSelectedProgram={setSelectedProgram}
         selectedMonth={selectedMonth}
         setSelectedMonth={setSelectedMonth}
       />
+
       <SummaryCards selectedProgram={selectedProgram} />
-      <ChartPlaceholder />
+
+      {/* Trend chart reads saved contractors per program */}
+      <ChartPlaceholder selectedProgram={selectedProgram} />
     </div>
   );
 }
