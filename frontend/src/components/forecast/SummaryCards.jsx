@@ -52,6 +52,17 @@ function computeRollup(items) {
   return { msByMonth, nfByMonth };
 }
 
+/** Wrap wide content so the PAGE doesn't horizontally scroll.
+ *  The scrollbar stays inside the card/panel.
+ */
+function ScrollFrame({ children, minWidthClass = "min-w-[1100px]" }) {
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className={`w-full ${minWidthClass}`}>{children}</div>
+    </div>
+  );
+}
+
 /* =========================================================
    Main
 ========================================================= */
@@ -205,7 +216,7 @@ export default function SummaryCards({ selectedProgram }) {
 
   return (
     <div className="space-y-6">
-      {/* Forecast Companion bar (bigger + feels like it spans width) */}
+      {/* Forecast Companion bar */}
       <div className="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -234,11 +245,13 @@ export default function SummaryCards({ selectedProgram }) {
           {navItem("external", "External", "External contractors and SOW tracking", "green")}
         </div>
 
-        {/* RIGHT CONTENT */}
-        <div className="space-y-6">
+        {/* RIGHT CONTENT
+            IMPORTANT: min-w-0 prevents the right column from forcing page-level horizontal scroll
+        */}
+        <div className="min-w-0 space-y-6">
           {/* INTERNAL */}
           {activeSection === "internal" ? (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -290,7 +303,7 @@ export default function SummaryCards({ selectedProgram }) {
 
           {/* TOOLS & SERVICES */}
           {activeSection === "tools" ? (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -343,16 +356,20 @@ export default function SummaryCards({ selectedProgram }) {
                 </div>
               </div>
 
-              <div className="mt-5">
+              <div className="mt-5 min-w-0">
                 {tnsTab === "total" ? (
-                  <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter={true} />
+                  <ScrollFrame minWidthClass="min-w-[1050px]">
+                    <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter={true} />
+                  </ScrollFrame>
                 ) : (
-                  <ToolsServicesDetails
-                    programKey={programKey}
-                    items={tnsItems}
-                    setItems={setTnsItems}
-                    onLog={logTns}
-                  />
+                  <ScrollFrame minWidthClass="min-w-[1050px]">
+                    <ToolsServicesDetails
+                      programKey={programKey}
+                      items={tnsItems}
+                      setItems={setTnsItems}
+                      onLog={logTns}
+                    />
+                  </ScrollFrame>
                 )}
               </div>
             </div>
@@ -360,7 +377,7 @@ export default function SummaryCards({ selectedProgram }) {
 
           {/* EXTERNAL */}
           {activeSection === "external" ? (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <button
@@ -413,23 +430,30 @@ export default function SummaryCards({ selectedProgram }) {
                 </div>
               </div>
 
-              <div className="mt-5">
+              <div className="mt-5 min-w-0">
                 {externalTab === "total" ? (
-                  <MonthTable title="External" rows={externalMonthlyRows} showMonthFilter={true} />
+                  <ScrollFrame minWidthClass="min-w-[1050px]">
+                    <MonthTable title="External" rows={externalMonthlyRows} showMonthFilter={true} />
+                  </ScrollFrame>
                 ) : (
                   <div className="space-y-5">
-                    <ExternalContractorsDetails
-                      programKey={programKey}
-                      contractors={contractors}
-                      setContractors={setContractors}
-                      onLog={logExternal}
-                    />
-                    <ExternalSowDetails
-                      programKey={programKey}
-                      sows={sows}
-                      setSows={setSows}
-                      onLog={logExternal}
-                    />
+                    <ScrollFrame minWidthClass="min-w-[1050px]">
+                      <ExternalContractorsDetails
+                        programKey={programKey}
+                        contractors={contractors}
+                        setContractors={setContractors}
+                        onLog={logExternal}
+                      />
+                    </ScrollFrame>
+
+                    <ScrollFrame minWidthClass="min-w-[1050px]">
+                      <ExternalSowDetails
+                        programKey={programKey}
+                        sows={sows}
+                        setSows={setSows}
+                        onLog={logExternal}
+                      />
+                    </ScrollFrame>
                   </div>
                 )}
               </div>
