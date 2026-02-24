@@ -41,11 +41,16 @@ function computeRollup(contractors) {
 
 export default function ChartPlaceholder({ selectedProgram }) {
   const programKey = getProgramKey(selectedProgram);
-  const storageKey = `pfc.${programKey}.contractors`;
+
+  // ✅ MUST match where contractors are saved in forecast/SummaryCards.jsx
+  const storageKey = `pfc.${programKey}.external.contractors`;
 
   const [contractors, setContractors] = useState([]);
+  const [viewMode, setViewMode] = useState("total"); // total | ms | nf | stacked
 
-  // Load from localStorage (and update if localStorage changes)
+  // Load from localStorage + listen for both:
+  // - "storage" (other tabs)
+  // - "pfc:storage" (same tab writes; we'll dispatch this from SummaryCards)
   useEffect(() => {
     const load = () => {
       const raw = localStorage.getItem(storageKey);
@@ -55,20 +60,35 @@ export default function ChartPlaceholder({ selectedProgram }) {
 
     load();
 
-    // Listen for storage changes (works if another tab changes it)
     const onStorage = (e) => {
       if (e.key === storageKey) load();
     };
-    window.addEventListener("storage", onStorage);
 
-    return () => window.removeEventListener("storage", onStorage);
+    const onPfcStorage = (e) => {
+      if (e?.detail?.key === storageKey) load();
+    };
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("pfc:storage", onPfcStorage);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("pfc:storage", onPfcStorage);
+    };
   }, [storageKey]);
 
   const rollup = useMemo(() => computeRollup(contractors), [contractors]);
 
-  const maxTotal = useMemo(() => {
-    return Math.max(1, ...MONTHS.map((m) => rollup.total[m] || 0));
-  }, [rollup]);
+  const maxY = useMemo(() => {
+    const values =
+      viewMode === "ms"
+        ? MONTHS.map((m) => rollup.ms[m] || 0)
+        : viewMode === "nf"
+        ? MONTHS.map((m) => rollup.nf[m] || 0)
+        : MONTHS.map((m) => rollup.total[m] || 0);
+
+    return Math.max(1, ...values);
+  }, [rollup, viewMode]);
 
   const yearMS = useMemo(
     () => MONTHS.reduce((a, m) => a + (rollup.ms[m] || 0), 0),
@@ -81,107 +101,149 @@ export default function ChartPlaceholder({ selectedProgram }) {
   const yearTotal = yearMS + yearNF;
 
   return (
-    <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-semibold text-gray-900">
-            External Contractors Trend (MS + NF)
+          <div className="text-lg font-bold text-gray-900">
+            External Contractors Trend
           </div>
-          <div className="mt-1 text-xs text-gray-600">
-            Reads from saved data: <span className="font-mono">{storageKey}</span>
+          <div className="mt-1 text-sm text-gray-600">
+            Reads from saved data:{" "}
+            <span className="font-mono text-xs">{storageKey}</span>
           </div>
-        </div>
-
-        <div className="rounded-xl bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-          <div className="text-xs text-gray-600">Year Total</div>
-          <div className="text-sm font-semibold text-gray-900">
-            {fmtCompact(yearTotal)}{" "}
-            <span className="text-xs text-gray-500">
+          <div className="mt-2 text-sm font-semibold text-gray-900">
+            Year Total: {fmtCompact(yearTotal)}{" "}
+            <span className="font-normal text-gray-600">
               (MS {fmtCompact(yearMS)} / NF {fmtCompact(yearNF)})
             </span>
           </div>
         </div>
+
+        {/* ✅ Dropdown */}
+        <div className="flex flex-col items-end gap-2">
+          <label className="text-xs font-semibold text-gray-700">
+            View
+          </label>
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
+          >
+            <option value="total">Total (MS + NF)</option>
+            <option value="ms">MS only</option>
+            <option value="nf">NF only</option>
+            <option value="stacked">Stacked (MS + NF)</option>
+          </select>
+        </div>
       </div>
 
       {/* Chart */}
-      <div className="mt-5 overflow-x-auto">
-        <div className="min-w-[1200px]">
-          {/* Y-axis guides */}
-          <div className="relative h-[280px] rounded-2xl bg-gray-50 ring-1 ring-gray-100">
-            {/* grid lines */}
-            <div className="absolute inset-0 flex flex-col justify-between p-4">
-              {[1, 0.75, 0.5, 0.25, 0].map((t) => (
-                <div key={t} className="flex items-center gap-3">
-                  <div className="w-16 text-xs text-gray-500 tabular-nums">
-                    {fmtCompact(maxTotal * t)}
-                  </div>
-                  <div className="h-px flex-1 bg-gray-200" />
-                </div>
-              ))}
+      <div className="mt-5 grid grid-cols-12 gap-2">
+        {/* Y-axis guides */}
+        <div className="col-span-12 relative h-48 rounded-2xl border border-gray-100 bg-gray-50/50 p-3">
+          {/* grid lines + labels */}
+          {[1, 0.75, 0.5, 0.25, 0].map((t) => (
+            <div
+              key={t}
+              className="absolute left-3 right-3 flex items-center justify-between"
+              style={{ top: `${(1 - t) * 100}%` }}
+            >
+              <div className="text-[10px] font-semibold text-gray-500">
+                {fmtCompact(maxY * t)}
+              </div>
+              <div className="h-px flex-1 bg-gray-200/60 ml-2" />
             </div>
+          ))}
 
-            {/* bars */}
-            <div className="absolute inset-0 flex items-end gap-2 px-6 pb-6 pt-10">
-              {MONTHS.map((m) => {
-                const ms = rollup.ms[m] || 0;
-                const nf = rollup.nf[m] || 0;
-                const total = ms + nf;
+          {/* bars */}
+          <div className="absolute inset-3 flex items-end justify-between gap-2">
+            {MONTHS.map((m) => {
+              const ms = rollup.ms[m] || 0;
+              const nf = rollup.nf[m] || 0;
+              const total = ms + nf;
 
-                const totalPct = Math.max(0, Math.min(100, (total / maxTotal) * 100));
-                const msPctOfTotal = total === 0 ? 0 : (ms / total) * 100;
-                const nfPctOfTotal = total === 0 ? 0 : (nf / total) * 100;
+              const isQuarter = m === "Apr" || m === "Jul" || m === "Oct";
 
-                const isQuarter = m === "Apr" || m === "Jul" || m === "Oct";
+              // bar heights based on view
+              const totalPct = Math.max(0, Math.min(100, (total / maxY) * 100));
+              const msPct = Math.max(0, Math.min(100, (ms / maxY) * 100));
+              const nfPct = Math.max(0, Math.min(100, (nf / maxY) * 100));
 
-                return (
-                  <div key={m} className="flex w-[78px] flex-col items-center">
-                    <div
-                      className={[
-                        "relative w-full rounded-xl bg-white ring-1 ring-gray-200",
-                        isQuarter ? "ring-2 ring-gray-300" : "",
-                      ].join(" ")}
-                      style={{ height: `${totalPct}%` }}
-                      title={`${m}: MS ${Math.round(ms)} / NF ${Math.round(nf)} / Total ${Math.round(total)}`}
-                    >
-                      {/* stacked fill */}
+              return (
+                <div key={m} className="flex-1 flex flex-col items-center">
+                  <div
+                    className={[
+                      "w-full rounded-xl border",
+                      isQuarter ? "border-gray-300" : "border-gray-200",
+                      "bg-white",
+                      "overflow-hidden",
+                      "relative",
+                      "h-40",
+                    ].join(" ")}
+                  >
+                    {viewMode === "stacked" ? (
+                      <>
+                        <div
+                          className="absolute bottom-0 left-0 right-0 bg-blue-600/70"
+                          style={{
+                            height: `${total === 0 ? 0 : (ms / total) * totalPct}%`,
+                          }}
+                          title={`MS ${fmtCompact(ms)}`}
+                        />
+                        <div
+                          className="absolute bottom-0 left-0 right-0 bg-emerald-600/70"
+                          style={{
+                            height: `${total === 0 ? 0 : (nf / total) * totalPct}%`,
+                            transform: `translateY(-${
+                              total === 0 ? 0 : (ms / total) * totalPct
+                            }%)`,
+                          }}
+                          title={`NF ${fmtCompact(nf)}`}
+                        />
+                      </>
+                    ) : (
                       <div
-                        className="absolute bottom-0 left-0 right-0 rounded-b-xl bg-blue-500/40"
-                        style={{ height: `${msPctOfTotal}%` }}
+                        className="absolute bottom-0 left-0 right-0 bg-gray-900/70"
+                        style={{
+                          height:
+                            viewMode === "ms"
+                              ? `${msPct}%`
+                              : viewMode === "nf"
+                              ? `${nfPct}%`
+                              : `${totalPct}%`,
+                        }}
+                        title={
+                          viewMode === "ms"
+                            ? `MS ${fmtCompact(ms)}`
+                            : viewMode === "nf"
+                            ? `NF ${fmtCompact(nf)}`
+                            : `Total ${fmtCompact(total)}`
+                        }
                       />
-                      <div
-                        className="absolute left-0 right-0 bg-purple-500/35"
-                        style={{ bottom: `${msPctOfTotal}%`, height: `${nfPctOfTotal}%` }}
-                      />
+                    )}
 
-                      {/* total label */}
-                      {total > 0 ? (
-                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[11px] font-semibold text-gray-700 tabular-nums">
-                          {fmtCompact(total)}
-                        </div>
-                      ) : null}
+                    {/* top label */}
+                    <div className="absolute top-1 left-0 right-0 text-center text-[10px] font-bold text-gray-700">
+                      {total > 0 ? fmtCompact(total) : ""}
                     </div>
-
-                    <div className="mt-2 text-xs font-medium text-gray-700">{m}</div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {/* legend */}
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-600">
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-3 w-3 rounded bg-blue-500/40 ring-1 ring-gray-200" />
-              MS
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-3 w-3 rounded bg-purple-500/35 ring-1 ring-gray-200" />
-              NF
-            </div>
-            <div className="text-xs text-gray-500">
-              Quarter markers: Apr / Jul / Oct highlighted border
-            </div>
+                  <div className="mt-2 text-xs font-semibold text-gray-700">
+                    {m}
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="mt-4 text-xs text-gray-600">
+        <div className="font-semibold text-gray-800">Legend</div>
+        <div>
+          <span className="font-semibold">MS</span> = MarketSource,{" "}
+          <span className="font-semibold">NF</span> = Non-Fusion
         </div>
       </div>
     </div>
