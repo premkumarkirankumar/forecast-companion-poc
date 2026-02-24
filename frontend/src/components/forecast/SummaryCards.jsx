@@ -1,4 +1,5 @@
 // frontend/src/components/forecast/SummaryCards.jsx
+
 import { useEffect, useMemo, useState } from "react";
 import { MONTHS } from "../../data/hub";
 
@@ -88,7 +89,7 @@ export default function SummaryCards({ selectedProgram }) {
     []
   );
 
-  // T&S state (we keep as-is; ToolsServicesDetails will normalize older shapes once)
+  // T&S state
   const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
   const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
 
@@ -103,7 +104,7 @@ export default function SummaryCards({ selectedProgram }) {
   const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
   const [tnsTab, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
-  // Internal placeholders
+  // Internal placeholders (wire later)
   const internalRows = useMemo(() => {
     return [
       {
@@ -114,7 +115,7 @@ export default function SummaryCards({ selectedProgram }) {
     ];
   }, [programKey]);
 
-  // External rollups
+  // External rollups -> monthly rows
   const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
   const sowRollup = useMemo(() => computeRollup(sows), [sows]);
 
@@ -133,7 +134,7 @@ export default function SummaryCards({ selectedProgram }) {
     ];
   }, [contractorsRollup, sowRollup]);
 
-  // T&S rollups
+  // T&S rollup -> single monthly row
   const tnsRollup = useMemo(() => computeRollup(tnsItems), [tnsItems]);
 
   const tnsMonthlyRows = useMemo(() => {
@@ -198,7 +199,7 @@ export default function SummaryCards({ selectedProgram }) {
         {open.internal ? <MonthTable title="Internal" rows={internalRows} /> : null}
       </div>
 
-      {/* TOOLS & SERVICES */}
+      {/* TOOLS & SERVICES (T&S) */}
       <div className="space-y-3">
         <SectionHeader
           title="Tools & Services"
@@ -265,7 +266,8 @@ export default function SummaryCards({ selectedProgram }) {
 
             <div className="mt-5">
               {tnsTab === "total" ? (
-                <MonthTable title="Tools & Services" rows={tnsMonthlyRows} />
+                // ✅ Month slider ONLY on T&S Total
+                <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter={true} />
               ) : (
                 <ToolsServicesDetails
                   programKey={programKey}
@@ -346,7 +348,8 @@ export default function SummaryCards({ selectedProgram }) {
 
             <div className="mt-5">
               {externalTab === "total" ? (
-                <MonthTable title="External" rows={externalMonthlyRows} />
+                // ✅ Month slider ONLY on External Total
+                <MonthTable title="External" rows={externalMonthlyRows} showMonthFilter={true} />
               ) : (
                 <div className="space-y-5">
                   <ExternalContractorsDetails
@@ -366,6 +369,12 @@ export default function SummaryCards({ selectedProgram }) {
             </div>
           </div>
         ) : null}
+      </div>
+
+      {/* Keep change log data in storage for your separate Change Log page */}
+      <div className="hidden">
+        {externalChangeLog.length}
+        {tnsChangeLog.length}
       </div>
     </div>
   );
