@@ -7,13 +7,11 @@ import MonthTable from "./MonthTable";
 
 import ExternalContractorsDetails from "./ExternalContractorsDetails";
 import ExternalSowDetails from "./ExternalSowDetails";
-
 import ToolsServicesDetails from "./ToolsServicesDetails";
-import ChangeLogPanel from "./ChangeLogPanel";
 
 /* =========================================================
    LocalStorage hook
-   ========================================================= */
+========================================================= */
 function useLocalStorageState(key, initialValue) {
   const [state, setState] = useState(() => {
     try {
@@ -38,7 +36,7 @@ function useLocalStorageState(key, initialValue) {
 
 /* =========================================================
    Helpers
-   ========================================================= */
+========================================================= */
 function emptyMonthMap() {
   return Object.fromEntries(MONTHS.map((m) => [m, undefined]));
 }
@@ -53,12 +51,13 @@ function computeRollup(items) {
       nfByMonth[m] += Number(it?.nfByMonth?.[m] ?? 0);
     }
   }
+
   return { msByMonth, nfByMonth };
 }
 
 /* =========================================================
    Main
-   ========================================================= */
+========================================================= */
 export default function SummaryCards({ selectedProgram }) {
   const programKey = selectedProgram || "connected";
 
@@ -89,26 +88,33 @@ export default function SummaryCards({ selectedProgram }) {
     []
   );
 
-  // T&S state
+  // T&S state (we keep as-is; ToolsServicesDetails will normalize older shapes once)
   const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
   const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
 
+  // Open sections
   const [open, setOpen] = useLocalStorageState(openKey, {
     internal: true,
     tools: true,
     external: true,
   });
 
+  // Tabs
   const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
   const [tnsTab, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
-  // Internal placeholders (you can wire later)
-  const internalRows = useMemo(
-    () => [{ label: "Internal", msByMonth: emptyMonthMap(), nfByMonth: emptyMonthMap() }],
-    [programKey]
-  );
+  // Internal placeholders
+  const internalRows = useMemo(() => {
+    return [
+      {
+        label: "Internal",
+        msByMonth: emptyMonthMap(),
+        nfByMonth: emptyMonthMap(),
+      },
+    ];
+  }, [programKey]);
 
-  // External rollups -> monthly rows
+  // External rollups
   const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
   const sowRollup = useMemo(() => computeRollup(sows), [sows]);
 
@@ -127,7 +133,7 @@ export default function SummaryCards({ selectedProgram }) {
     ];
   }, [contractorsRollup, sowRollup]);
 
-  // T&S rollup -> single monthly row
+  // T&S rollups
   const tnsRollup = useMemo(() => computeRollup(tnsItems), [tnsItems]);
 
   const tnsMonthlyRows = useMemo(() => {
@@ -166,23 +172,17 @@ export default function SummaryCards({ selectedProgram }) {
     <div className="space-y-6">
       {/* Header */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-lg font-bold text-gray-900">Forecast Companion</div>
-            <div className="mt-1 text-sm text-gray-600">
-              Program: <span className="font-semibold">{programKey}</span>
-            </div>
-          </div>
+        <div className="text-lg font-bold text-gray-900">Forecast Companion</div>
+        <div className="mt-1 text-sm text-gray-600">Program: {programKey}</div>
 
-          <div className="flex items-center gap-3">
-            <div className="text-sm font-semibold text-gray-700">Actor</div>
-            <input
-              value={actor}
-              onChange={(e) => setActor(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
-              placeholder="Your name"
-            />
-          </div>
+        <div className="mt-4 flex items-center gap-3">
+          <div className="text-sm font-semibold text-gray-700">Actor</div>
+          <input
+            value={actor}
+            onChange={(e) => setActor(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
+            placeholder="Your name"
+          />
         </div>
       </div>
 
@@ -190,32 +190,28 @@ export default function SummaryCards({ selectedProgram }) {
       <div className="space-y-3">
         <SectionHeader
           title="Internal"
-          subtitle="Placeholder (wire internal data later)"
-          accent="blue"
-          isOpen={!!open.internal}
+          subtitle="Internal forecast totals (placeholder)"
+          accent="purple"
+          isOpen={open.internal}
           onToggle={() => setOpen((s) => ({ ...s, internal: !s.internal }))}
         />
-        {open.internal ? (
-          <div className="space-y-4">
-            <MonthTable title="Internal — Monthly View" rows={internalRows} />
-          </div>
-        ) : null}
+        {open.internal ? <MonthTable title="Internal" rows={internalRows} /> : null}
       </div>
 
-      {/* TOOLS & SERVICES (T&S) */}
+      {/* TOOLS & SERVICES */}
       <div className="space-y-3">
         <SectionHeader
           title="Tools & Services"
-          subtitle=""
+          subtitle="Forecast tracking for tools and shared services"
           accent="purple"
-          isOpen={!!open.tools}
+          isOpen={open.tools}
           onToggle={() => setOpen((s) => ({ ...s, tools: !s.tools }))}
         />
 
         {open.tools ? (
-          <div className="space-y-4">
-            {/* T&S Tabs */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Tabs */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setTnsTab("total")}
@@ -226,9 +222,8 @@ export default function SummaryCards({ selectedProgram }) {
                       : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
                   ].join(" ")}
                 >
-                  T&amp;S Total
+                  T&S Total
                 </button>
-
                 <button
                   onClick={() => setTnsTab("details")}
                   className={[
@@ -238,53 +233,48 @@ export default function SummaryCards({ selectedProgram }) {
                       : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
                   ].join(" ")}
                 >
-                  T&amp;S Details
+                  T&S Details
                 </button>
               </div>
 
+              {/* Actions */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    if (confirm(`Clear saved Tools & Services for ${programKey}?`))
+                    if (confirm(`Clear saved Tools & Services for ${programKey}?`)) {
                       setTnsItems([]);
+                    }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                 >
-                  Reset T&amp;S
+                  Reset T&S
                 </button>
 
                 <button
                   onClick={() => {
-                    if (confirm(`Clear T&S change log for ${programKey}?`)) setTnsChangeLog([]);
+                    if (confirm(`Clear T&S change log for ${programKey}?`)) {
+                      setTnsChangeLog([]);
+                    }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                 >
-                  Reset T&amp;S Log
+                  Reset T&S Log
                 </button>
               </div>
             </div>
 
-            {tnsTab === "total" ? (
-              <div className="space-y-4">
-                <MonthTable title="T&S — Monthly View" rows={tnsMonthlyRows} showMonthFilter={true} />
-              </div>
-            ) : (
-              <div className="space-y-4">
+            <div className="mt-5">
+              {tnsTab === "total" ? (
+                <MonthTable title="Tools & Services" rows={tnsMonthlyRows} />
+              ) : (
                 <ToolsServicesDetails
                   programKey={programKey}
                   items={tnsItems}
                   setItems={setTnsItems}
                   onLog={logTns}
                 />
-
-                {/* ✅ pass actor into changelog panel */}
-                <ChangeLogPanel
-                  programKey={programKey}
-                  changeLog={tnsChangeLog}
-                  actor={actor}
-                />
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : null}
       </div>
@@ -293,15 +283,16 @@ export default function SummaryCards({ selectedProgram }) {
       <div className="space-y-3">
         <SectionHeader
           title="External"
-          subtitle="Contractors + External SOW (saved per program)"
+          subtitle="External contractors and SOW tracking"
           accent="green"
-          isOpen={!!open.external}
+          isOpen={open.external}
           onToggle={() => setOpen((s) => ({ ...s, external: !s.external }))}
         />
 
         {open.external ? (
-          <div className="space-y-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Tabs */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setExternalTab("total")}
@@ -314,7 +305,6 @@ export default function SummaryCards({ selectedProgram }) {
                 >
                   External Total
                 </button>
-
                 <button
                   onClick={() => setExternalTab("details")}
                   className={[
@@ -328,10 +318,13 @@ export default function SummaryCards({ selectedProgram }) {
                 </button>
               </div>
 
+              {/* Actions */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    if (confirm(`Clear saved Contractors for ${programKey}?`)) setContractors([]);
+                    if (confirm(`Clear saved Contractors for ${programKey}?`)) {
+                      setContractors([]);
+                    }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                 >
@@ -340,7 +333,9 @@ export default function SummaryCards({ selectedProgram }) {
 
                 <button
                   onClick={() => {
-                    if (confirm(`Clear saved SOWs for ${programKey}?`)) setSows([]);
+                    if (confirm(`Clear saved SOWs for ${programKey}?`)) {
+                      setSows([]);
+                    }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                 >
@@ -349,38 +344,26 @@ export default function SummaryCards({ selectedProgram }) {
               </div>
             </div>
 
-            {externalTab === "total" ? (
-              <div className="space-y-4">
-                <MonthTable
-                  title="External — Monthly View"
-                  rows={externalMonthlyRows}
-                  showMonthFilter={true}
-                />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <ExternalContractorsDetails
-                  programKey={programKey}
-                  contractors={contractors}
-                  setContractors={setContractors}
-                  onLog={logExternal}
-                />
-
-                <ExternalSowDetails
-                  programKey={programKey}
-                  sows={sows}
-                  setSows={setSows}
-                  onLog={logExternal}
-                />
-
-                {/* ✅ pass actor into changelog panel */}
-                <ChangeLogPanel
-                  programKey={programKey}
-                  changeLog={externalChangeLog}
-                  actor={actor}
-                />
-              </div>
-            )}
+            <div className="mt-5">
+              {externalTab === "total" ? (
+                <MonthTable title="External" rows={externalMonthlyRows} />
+              ) : (
+                <div className="space-y-5">
+                  <ExternalContractorsDetails
+                    programKey={programKey}
+                    contractors={contractors}
+                    setContractors={setContractors}
+                    onLog={logExternal}
+                  />
+                  <ExternalSowDetails
+                    programKey={programKey}
+                    sows={sows}
+                    setSows={setSows}
+                    onLog={logExternal}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
       </div>

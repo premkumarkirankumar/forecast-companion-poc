@@ -1,242 +1,554 @@
-import { useMemo, useState } from "react";
+// frontend/src/components/forecast/ToolsServicesDetails.jsx
+import { useEffect, useState } from "react";
+import { MONTHS } from "../../data/hub";
 
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/* ========================= Helpers (adapted from ExternalSowDetails) ========================= */
 
-function fmtMoney(n) {
-  const v = Number(n || 0);
-  return v.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+function fmt(value) {
+  if (value === null || value === undefined) return "$—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
-function sum(arr) {
-  return (arr || []).reduce((a, b) => a + Number(b || 0), 0);
+function monthDividerClass(m) {
+  const isQuarterStart = m === "Apr" || m === "Jul" || m === "Oct";
+  const base = m === "Jan" ? "" : "border-l border-gray-100";
+  const quarter = isQuarterStart ? " border-l-2 border-gray-200" : "";
+  return (base + quarter).trim();
 }
 
-function clampMoneyInput(raw) {
-  // allow empty while typing
-  if (raw === "") return "";
-  const cleaned = String(raw).replace(/[^\d]/g, "");
-  return cleaned === "" ? "" : Number(cleaned);
-}
-
-/**
- * item shape expected:
- * {
- *   id: string,
- *   name: string,
- *   yearTarget: number,
- *   months: { ms: number[12], nf: number[12] }  // nf kept but forced to 0 in UI
- *   isExpanded?: boolean
- * }
- */
-export default function ToolsServicesDetails({
-  items,
-  onUpdateItem,
-  onRemoveItem,
-}) {
-  return (
-    <div className="space-y-4">
-      {items.map((item) => (
-        <ToolsServiceCard
-          key={item.id}
-          item={item}
-          onUpdateItem={onUpdateItem}
-          onRemoveItem={onRemoveItem}
-        />
-      ))}
-    </div>
+function headCellClass(m) {
+  return ["px-3 py-3 text-right font-medium whitespace-nowrap", monthDividerClass(m)].join(
+    " "
   );
 }
 
-function ToolsServiceCard({ item, onUpdateItem, onRemoveItem }) {
-  const [expanded, setExpanded] = useState(Boolean(item.isExpanded));
+function bodyCellClass(m) {
+  return ["px-2 py-3 align-top", monthDividerClass(m)].join(" ");
+}
 
-  const msMonths = item.months?.ms || Array(12).fill(0);
-  const nfMonths = Array(12).fill(0); // forced 0
+function num(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+}
 
-  const msYear = useMemo(() => sum(msMonths), [msMonths]);
-  const nfYear = 0;
-  const totalYear = msYear;
+function hasValue(v) {
+  return String(v ?? "").trim().length > 0;
+}
 
-  const monthlyTotals = useMemo(() => {
-    return MONTHS.map((_, i) => Number(msMonths[i] || 0) + 0);
-  }, [msMonths]);
+/**
+ * Distributes (total - lockedSum) evenly across unlocked months.
+ * lockedByMonth uses MONTHS keys: { Jan: 1000, Feb: undefined, ... }
+ */
+function distributeEvenly(total, lockedByMonth) {
+  const lockedSum = MONTHS.reduce((a, m) => a + (lockedByMonth[m] ?? 0), 0);
+  const remaining = Math.max(0, total - lockedSum);
+  const unlockedMonths = MONTHS.filter((m) => lockedByMonth[m] === undefined);
+  const per = unlockedMonths.length ? remaining / unlockedMonths.length : 0;
 
-  function setName(v) {
-    onUpdateItem({ ...item, name: v });
+  const out = {};
+  for (const m of MONTHS) {
+    out[m] = lockedByMonth[m] === undefined ? per : lockedByMonth[m];
+  }
+  return out;
+}
+
+/**
+ * Normalize old stored T&S shape to the new SOW-like shape.
+ * Supports previous shape:
+ *  - { months: { ms: number[12], nf: number[12] }, yearTarget }
+ * And new shape:
+ *  - { msByMonth: {Jan..}, nfByMonth: {Jan..}, yearTargetTotal, msLocked }
+ */
+function normalizeTnsItem(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  // Already new shape
+  if (raw.msByMonth && typeof raw.msByMonth === "object") {
+    const msByMonth = {};
+    const nfByMonth = {};
+    for (const m of MONTHS) {
+      msByMonth[m] = num(raw.msByMonth?.[m]);
+      nfByMonth[m] = 0; // enforce NF 0
+    }
+    return {
+      id: raw.id || crypto.randomUUID(),
+      name: String(raw.name || "").trim(),
+      msPct: 100,
+      nfPct: 0,
+      yearTargetTotal: num(raw.yearTargetTotal ?? raw.yearTarget ?? 0),
+      msByMonth,
+      nfByMonth,
+      msLocked: raw.msLocked && typeof raw.msLocked === "object" ? raw.msLocked : {},
+      nfLocked: {}, // enforce
+    };
   }
 
-  function setYearTarget(v) {
-    onUpdateItem({ ...item, yearTarget: Number(v || 0) });
+  // Old shape (months arrays)
+  const arr = raw.months?.ms;
+  const msByMonth = {};
+  const nfByMonth = {};
+  for (let i = 0; i < MONTHS.length; i++) {
+    msByMonth[MONTHS[i]] = num(Array.isArray(arr) ? arr[i] : 0);
+    nfByMonth[MONTHS[i]] = 0;
   }
 
-  function setMsMonth(idx, v) {
-    const next = [...msMonths];
-    next[idx] = Number(v || 0);
-    onUpdateItem({ ...item, months: { ms: next, nf: nfMonths } });
+  const yearTargetTotal =
+    num(raw.yearTarget) ||
+    MONTHS.reduce((a, m) => a + (msByMonth[m] ?? 0), 0);
+
+  return {
+    id: raw.id || crypto.randomUUID(),
+    name: String(raw.name || "").trim(),
+    msPct: 100,
+    nfPct: 0,
+    yearTargetTotal,
+    msByMonth,
+    nfByMonth,
+    msLocked: {}, // cannot infer from old shape
+    nfLocked: {},
+  };
+}
+
+/* ========================= Main Component ========================= */
+
+export default function ToolsServicesDetails({
+  programKey,
+  items,
+  setItems,
+  onLog,
+}) {
+  // Persist expanded cards per program (T&S)
+  const expandedKey = `pfc.${programKey}.ui.tns.expandedIds`;
+
+  const [expandedIds, setExpandedIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(expandedKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(expandedKey, JSON.stringify(expandedIds));
+    } catch {
+      // ignore
+    }
+  }, [expandedKey, expandedIds]);
+
+  // Normalize existing items once (supports migration from older T&S shape)
+  useEffect(() => {
+    const normalized = (items || [])
+      .map(normalizeTnsItem)
+      .filter(Boolean);
+
+    const sameLength = normalized.length === (items || []).length;
+
+    // If shape differs, replace with normalized
+    // (simple check: if any item lacks msByMonth, we normalize)
+    const needs =
+      (items || []).some((x) => x && !x.msByMonth) || !sameLength;
+
+    if (needs) {
+      setItems(normalized);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function isExpanded(id) {
+    return expandedIds.includes(id);
   }
 
-  function autoFillFromYearTarget() {
-    const y = Number(item.yearTarget || 0);
-    const perMonth = Math.floor(y / 12);
-    const remainder = y - perMonth * 12;
-
-    const next = Array(12).fill(perMonth);
-    for (let i = 0; i < remainder; i++) next[i] += 1;
-
-    onUpdateItem({ ...item, months: { ms: next, nf: nfMonths } });
+  function toggleExpanded(id) {
+    setExpandedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   }
+
+  const [draft, setDraft] = useState({
+    name: "",
+    totalYear: "",
+  });
+
+  function upd(k, v) {
+    setDraft((d) => ({ ...d, [k]: v }));
+  }
+
+  const canAdd = hasValue(draft.name) && hasValue(draft.totalYear);
+
+  function updateItem(id, patchFn) {
+    setItems((arr) => arr.map((x) => (x.id === id ? patchFn(x) : x)));
+  }
+
+  function recomputeFromYearTarget(s) {
+    // MS is 100%, NF is 0%
+    const msYear = s.yearTargetTotal;
+    return {
+      ...s,
+      msByMonth: distributeEvenly(msYear, s.msLocked || {}),
+      nfByMonth: Object.fromEntries(MONTHS.map((m) => [m, 0])),
+    };
+  }
+
+  function addItem() {
+    if (!canAdd) return;
+
+    const yearTarget = num(draft.totalYear);
+    const msYear = yearTarget;
+
+    const newItem = {
+      id: crypto.randomUUID(),
+      name: String(draft.name).trim(),
+      msPct: 100,
+      nfPct: 0,
+      yearTargetTotal: yearTarget,
+      msByMonth: distributeEvenly(msYear, {}),
+      nfByMonth: Object.fromEntries(MONTHS.map((m) => [m, 0])),
+      msLocked: {},
+      nfLocked: {},
+    };
+
+    setItems((arr) => [newItem, ...(arr || [])]);
+
+    onLog?.({
+      action: "ADD_TNS",
+      entityType: "tns",
+      entityId: newItem.id,
+      entityName: newItem.name,
+    });
+
+    setDraft({ name: "", totalYear: "" });
+  }
+
+  function removeItem(id) {
+    const existing = (items || []).find((x) => x.id === id);
+
+    onLog?.({
+      action: "REMOVE_TNS",
+      entityType: "tns",
+      entityId: id,
+      entityName: existing?.name,
+    });
+
+    setExpandedIds((prev) => prev.filter((x) => x !== id));
+    setItems((arr) => (arr || []).filter((x) => x.id !== id));
+  }
+
+  function updateName(id, name) {
+    const existing = (items || []).find((x) => x.id === id);
+
+    updateItem(id, (s) => ({ ...s, name }));
+
+    onLog?.({
+      action: "UPDATE_TNS_NAME",
+      entityType: "tns",
+      entityId: id,
+      entityName: existing?.name,
+      field: "name",
+      from: existing?.name,
+      to: name,
+    });
+  }
+
+  function setYearTarget(id, value) {
+    const val = num(value);
+    const existing = (items || []).find((x) => x.id === id);
+
+    onLog?.({
+      action: "UPDATE_TNS_YEAR_TARGET",
+      entityType: "tns",
+      entityId: id,
+      entityName: existing?.name,
+      field: "yearTargetTotal",
+      from: existing?.yearTargetTotal,
+      to: val,
+    });
+
+    updateItem(id, (s) => recomputeFromYearTarget({ ...s, yearTargetTotal: val }));
+  }
+
+  function setMonthValue(id, month, value) {
+    const val = num(value);
+    const existing = (items || []).find((x) => x.id === id);
+    const from = existing?.msLocked?.[month];
+
+    onLog?.({
+      action: "EDIT_TNS_MS_MONTH",
+      entityType: "tns",
+      entityId: id,
+      entityName: existing?.name,
+      field: `ms.${month}`,
+      from,
+      to: val,
+    });
+
+    updateItem(id, (s) => {
+      const next = {
+        ...s,
+        msLocked: { ...(s.msLocked || {}), [month]: val },
+      };
+      return recomputeFromYearTarget(next);
+    });
+  }
+
+  const subtlePanel =
+    "rounded-2xl border border-purple-200/60 bg-purple-50/20 p-5 shadow-sm";
 
   return (
-    <div className="rounded-2xl border bg-white overflow-hidden">
-      {/* Header (Hide mode summary) */}
-      <div className="px-6 py-5 bg-emerald-50/40 border-b">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm text-gray-500">Tool / Service Name</div>
-            <div className="text-2xl font-semibold">{item.name || "Untitled"}</div>
-            <div className="text-sm text-gray-600 mt-1">
-              Year Target: {fmtMoney(item.yearTarget || 0)} · Split <span className="font-semibold text-blue-600">MS 100%</span> / NF 0%
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="px-4 py-2 rounded-2xl border bg-emerald-50">
-              <div className="text-sm text-gray-600">Total (calc)</div>
-              <div className="text-xl font-semibold">{fmtMoney(totalYear)}</div>
-            </div>
-
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50"
-            >
-              {expanded ? "Hide" : "Show"}
-            </button>
-
-            <button
-              onClick={() => onRemoveItem(item.id)}
-              className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50"
-            >
-              Remove
-            </button>
-          </div>
+    <div className="space-y-4">
+      <div className={subtlePanel}>
+        <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
+        <div className="mt-1 text-xs text-gray-600">
+          Add Tool/Service → set yearly target → edit MS by month (auto rebalances remaining months).
         </div>
-      </div>
 
-      {/* Expanded */}
-      {expanded && (
-        <div className="p-6">
-          {/* Top editable row like SOW expanded */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
-            <div className="lg:col-span-2">
-              <div className="text-xs font-semibold text-gray-600 mb-1">
-                Tool / Service Name (editable)
-              </div>
+        <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
+          Quarter separators at Apr / Jul / Oct
+        </div>
+
+        {/* Add form (SOW-like) */}
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
+            <div className="md:col-span-2">
+              <div className="text-xs font-semibold text-gray-700">Tool / Service Name</div>
               <input
-                value={item.name || ""}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border"
+                value={draft.name}
+                onChange={(e) => upd("name", e.target.value)}
+                placeholder="e.g., GitHub Enterprise"
+                className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
               />
             </div>
 
             <div>
-              <div className="text-xs font-semibold text-gray-600 mb-1">
-                Year Target (editable)
-              </div>
+              <div className="text-xs font-semibold text-gray-700">T&S Total (year)</div>
               <input
-                value={String(item.yearTarget ?? 0)}
-                onChange={(e) => setYearTarget(clampMoneyInput(e.target.value))}
-                className="w-full px-4 py-3 rounded-2xl border"
+                value={draft.totalYear}
+                onChange={(e) => upd("totalYear", e.target.value)}
+                placeholder="$ total"
+                className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
               />
             </div>
 
-            <div className="rounded-2xl border bg-gray-50 px-4 py-3">
-              <div className="text-xs font-semibold text-gray-600">Total (calc)</div>
-              <div className="text-2xl font-semibold">{fmtMoney(totalYear)}</div>
+            <div>
+              <div className="text-xs font-semibold text-gray-700">MS %</div>
+              <input
+                value="100"
+                disabled
+                className="mt-1 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={addItem}
+                disabled={!canAdd}
+                className={[
+                  "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                  canAdd
+                    ? "bg-gray-900 text-white hover:bg-gray-800"
+                    : "bg-gray-100 text-gray-400 cursor-not-allowed",
+                ].join(" ")}
+              >
+                Add
+              </button>
             </div>
           </div>
-
-          <div className="mt-3">
-            <button
-              onClick={autoFillFromYearTarget}
-              className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50"
-            >
-              Auto-fill months from Year Target
-            </button>
-          </div>
-
-          {/* Month grid like SOW */}
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-[1100px] w-full border-separate border-spacing-0">
-              <thead>
-                <tr className="text-left text-sm text-gray-600">
-                  <th className="sticky left-0 bg-white z-10 px-3 py-3 border-b w-[160px]">Month</th>
-                  {MONTHS.map((m) => (
-                    <th key={m} className="px-3 py-3 border-b text-center">{m}</th>
-                  ))}
-                  <th className="px-3 py-3 border-b text-center">Year</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {/* MS editable */}
-                <tr>
-                  <td className="sticky left-0 bg-white z-10 px-3 py-4 border-b">
-                    <div className="font-semibold">MS</div>
-                    <div className="text-gray-500 text-sm">(editable)</div>
-                  </td>
-                  {MONTHS.map((_, idx) => (
-                    <td key={idx} className="px-3 py-4 border-b">
-                      <input
-                        value={String(msMonths[idx] ?? 0)}
-                        onChange={(e) => setMsMonth(idx, clampMoneyInput(e.target.value))}
-                        className="w-full text-center px-3 py-2 rounded-2xl border"
-                      />
-                    </td>
-                  ))}
-                  <td className="px-3 py-4 border-b text-center font-semibold">
-                    {fmtMoney(msYear)}
-                  </td>
-                </tr>
-
-                {/* NF fixed */}
-                <tr>
-                  <td className="sticky left-0 bg-white z-10 px-3 py-4 border-b">
-                    <div className="font-semibold">NF</div>
-                    <div className="text-gray-500 text-sm">(fixed)</div>
-                  </td>
-                  {MONTHS.map((_, idx) => (
-                    <td key={idx} className="px-3 py-4 border-b text-center text-gray-500 font-semibold">
-                      {fmtMoney(0)}
-                    </td>
-                  ))}
-                  <td className="px-3 py-4 border-b text-center font-semibold text-gray-500">
-                    {fmtMoney(nfYear)}
-                  </td>
-                </tr>
-
-                {/* Total calc */}
-                <tr>
-                  <td className="sticky left-0 bg-white z-10 px-3 py-4">
-                    <div className="font-semibold">Total</div>
-                    <div className="text-gray-500 text-sm">(calc)</div>
-                  </td>
-                  {monthlyTotals.map((t, idx) => (
-                    <td key={idx} className="px-3 py-4 text-center font-semibold">
-                      {fmtMoney(t)}
-                    </td>
-                  ))}
-                  <td className="px-3 py-4 text-center font-semibold">
-                    {fmtMoney(totalYear)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-4 text-xs text-gray-500">
-            Note: For Tools & Services, MS is treated as 100% and NF is always 0.
-          </div>
         </div>
+      </div>
+
+      {/* Cards */}
+      {(items || []).length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-600">
+          No Tools & Services items added yet.
+        </div>
+      ) : (
+        (items || []).map((s) => {
+          const msYear = MONTHS.reduce((a, m) => a + (s.msByMonth?.[m] ?? 0), 0);
+          const nfYear = 0;
+          const totalYear = msYear;
+
+          const expanded = isExpanded(s.id);
+
+          return (
+            <div key={s.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+              {/* Header row */}
+              <button
+                onClick={() => toggleExpanded(s.id)}
+                className="w-full px-5 py-4 text-left"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-gray-600">Tool / Service Name</div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      {s.name || "Untitled"}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      Year Target: <span className="font-semibold">{fmt(s.yearTargetTotal)}</span>{" "}
+                      • Split <span className="font-semibold">MS 100%</span> /{" "}
+                      <span className="font-semibold">NF 0%</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full bg-purple-50 px-4 py-2 text-sm font-bold text-gray-900 ring-1 ring-purple-200">
+                      Total (calc): {fmt(totalYear)}
+                    </div>
+
+                    <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
+                      {expanded ? "Hide" : "Show"}{" "}
+                      <span className="ml-1">{expanded ? "▾" : "▸"}</span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              {/* Expanded */}
+              {expanded ? (
+                <div className="border-t border-gray-100 px-5 py-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-gray-900">Tool / Service Name (editable)</div>
+
+                    <button
+                      onClick={() => removeItem(s.id)}
+                      className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <input
+                    value={s.name}
+                    onChange={(e) => updateName(s.id, e.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+                  />
+
+                  {/* Inputs row (like SOW expanded) */}
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                    <div>
+                      <div className="text-xs font-semibold text-gray-700">MS %</div>
+                      <input
+                        value="100"
+                        disabled
+                        className="mt-1 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-semibold text-gray-700">NF %</div>
+                      <input
+                        value="0"
+                        disabled
+                        className="mt-1 w-full cursor-not-allowed rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <div className="text-xs font-semibold text-gray-700">Year Target (editable)</div>
+                      <input
+                        value={s.yearTargetTotal}
+                        onChange={(e) => setYearTarget(s.id, e.target.value)}
+                        className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Total calc */}
+                  <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-semibold text-gray-700">Total (calc)</div>
+                    <div className="mt-1 text-lg font-extrabold text-gray-900">
+                      {fmt(totalYear)}
+                    </div>
+                  </div>
+
+                  {/* Monthly grid */}
+                  <div className="mt-5 overflow-auto rounded-2xl border border-gray-200">
+                    <table className="min-w-[980px] w-full border-collapse">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-3 text-left text-sm font-semibold text-gray-700">
+                            Month
+                          </th>
+                          {MONTHS.map((m) => (
+                            <th key={m} className={headCellClass(m)}>
+                              {m}
+                            </th>
+                          ))}
+                          <th className="px-3 py-3 text-right font-medium whitespace-nowrap border-l border-gray-100">
+                            Year
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {/* MS editable row */}
+                        <tr className="border-t border-gray-100">
+                          <td className="px-3 py-3 text-left text-sm font-semibold text-gray-900">
+                            MS (editable)
+                          </td>
+                          {MONTHS.map((m) => (
+                            <td key={m} className={bodyCellClass(m)}>
+                              <input
+                                value={Math.round(s.msByMonth?.[m] ?? 0)}
+                                onChange={(e) => setMonthValue(s.id, m, e.target.value)}
+                                className="w-28 rounded-xl border border-gray-200 bg-white px-3 py-2 text-right text-sm font-semibold text-gray-900"
+                              />
+                            </td>
+                          ))}
+                          <td className="px-3 py-3 text-right font-bold text-gray-900 border-l border-gray-100">
+                            {fmt(msYear)}
+                          </td>
+                        </tr>
+
+                        {/* NF row (forced 0) */}
+                        <tr className="border-t border-gray-100 bg-white">
+                          <td className="px-3 py-3 text-left text-sm font-semibold text-gray-900">
+                            NF (locked 0)
+                          </td>
+                          {MONTHS.map((m) => (
+                            <td key={m} className={bodyCellClass(m)}>
+                              <div className="w-28 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-right text-sm font-semibold text-gray-600">
+                                0
+                              </div>
+                            </td>
+                          ))}
+                          <td className="px-3 py-3 text-right font-bold text-gray-700 border-l border-gray-100">
+                            {fmt(nfYear)}
+                          </td>
+                        </tr>
+
+                        {/* Total calc row */}
+                        <tr className="border-t border-gray-200 bg-gray-50">
+                          <td className="px-3 py-3 text-left text-sm font-semibold text-gray-900">
+                            Total (calc)
+                          </td>
+                          {MONTHS.map((m) => (
+                            <td key={m} className={bodyCellClass(m)}>
+                              <div className="w-28 px-3 py-2 text-right text-sm font-bold text-gray-900">
+                                {fmt((s.msByMonth?.[m] ?? 0) + 0)}
+                              </div>
+                            </td>
+                          ))}
+                          <td className="px-3 py-3 text-right text-sm font-extrabold text-gray-900 border-l border-gray-100">
+                            {fmt(totalYear)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mt-3 text-xs text-gray-500">
+                    Tip: Editing a month locks that month and redistributes the remaining amount across other months.
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })
       )}
     </div>
   );
