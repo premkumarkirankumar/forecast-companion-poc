@@ -6,6 +6,8 @@ import { MONTHS } from "../../data/hub";
 import SectionHeader from "./SectionHeader";
 import MonthTable from "./MonthTable";
 
+import InternalLabor from "./InternalLabor";
+
 import ExternalContractorsDetails from "./ExternalContractorsDetails";
 import ExternalSowDetails from "./ExternalSowDetails";
 import ToolsServicesDetails from "./ToolsServicesDetails";
@@ -38,10 +40,6 @@ function useLocalStorageState(key, initialValue) {
 /* =========================================================
    Helpers
 ========================================================= */
-function emptyMonthMap() {
-  return Object.fromEntries(MONTHS.map((m) => [m, undefined]));
-}
-
 function computeRollup(items) {
   const msByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
   const nfByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
@@ -62,24 +60,46 @@ function computeRollup(items) {
 export default function SummaryCards({ selectedProgram }) {
   const programKey = selectedProgram || "connected";
 
-  // External keys
-  const contractorsKey = `pfc.${programKey}.external.contractors`;
-  const sowKey = `pfc.${programKey}.external.sow`;
-  const externalChangelogKey = `pfc.${programKey}.external.changelog`;
-
-  // T&S keys
-  const tnsItemsKey = `pfc.${programKey}.tns.items`;
-  const tnsChangelogKey = `pfc.${programKey}.tns.changelog`;
-
   // Global keys
   const actorKey = `pfc.actor`;
 
   // UI keys
   const openKey = `pfc.${programKey}.ui.openSections`;
+
+  // Internal keys
+  const internalTabKey = `pfc.${programKey}.ui.internalTab`; // total|details
+  const internalItemsKey = `pfc.${programKey}.internal.labor.items`;
+
+  // External keys
   const externalTabKey = `pfc.${programKey}.ui.externalTab`; // total|details
+  const contractorsKey = `pfc.${programKey}.external.contractors`;
+  const sowKey = `pfc.${programKey}.external.sow`;
+  const externalChangelogKey = `pfc.${programKey}.external.changelog`;
+
+  // T&S keys
   const tnsTabKey = `pfc.${programKey}.ui.tnsTab`; // total|details
+  const tnsItemsKey = `pfc.${programKey}.tns.items`;
+  const tnsChangelogKey = `pfc.${programKey}.tns.changelog`;
 
   const [actor, setActor] = useLocalStorageState(actorKey, "Neo");
+
+  // Open sections
+  const [open, setOpen] = useLocalStorageState(openKey, {
+    internal: true,
+    tools: true,
+    external: true,
+  });
+
+  // Tabs
+  const [internalTab, setInternalTab] = useLocalStorageState(internalTabKey, "total");
+  const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
+  const [tnsTab, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
+
+  // Internal state
+  const [internalLaborItems, setInternalLaborItems] = useLocalStorageState(
+    internalItemsKey,
+    []
+  );
 
   // External state
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
@@ -92,28 +112,6 @@ export default function SummaryCards({ selectedProgram }) {
   // T&S state
   const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
   const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
-
-  // Open sections
-  const [open, setOpen] = useLocalStorageState(openKey, {
-    internal: true,
-    tools: true,
-    external: true,
-  });
-
-  // Tabs
-  const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
-  const [tnsTab, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
-
-  // Internal placeholders (wire later)
-  const internalRows = useMemo(() => {
-    return [
-      {
-        label: "Internal",
-        msByMonth: emptyMonthMap(),
-        nfByMonth: emptyMonthMap(),
-      },
-    ];
-  }, [programKey]);
 
   // External rollups -> monthly rows
   const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
@@ -191,12 +189,66 @@ export default function SummaryCards({ selectedProgram }) {
       <div className="space-y-3">
         <SectionHeader
           title="Internal"
-          subtitle="Internal forecast totals (placeholder)"
+          subtitle="Internal labor (FTE) totals and assumptions"
           accent="purple"
           isOpen={open.internal}
           onToggle={() => setOpen((s) => ({ ...s, internal: !s.internal }))}
         />
-        {open.internal ? <MonthTable title="Internal" rows={internalRows} /> : null}
+
+        {open.internal ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Internal Tabs */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setInternalTab("total")}
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
+                    internalTab === "total"
+                      ? "bg-gray-900 text-white ring-gray-900"
+                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Internal Total
+                </button>
+
+                <button
+                  onClick={() => setInternalTab("details")}
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
+                    internalTab === "details"
+                      ? "bg-gray-900 text-white ring-gray-900"
+                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  Internal Details
+                </button>
+              </div>
+
+              {/* Internal Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (confirm(`Clear saved Internal labor items for ${programKey}?`)) {
+                      setInternalLaborItems([]);
+                    }
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                >
+                  Reset Internal
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <InternalLabor
+                mode={internalTab}
+                items={internalLaborItems}
+                setItems={setInternalLaborItems}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* TOOLS & SERVICES (T&S) */}
@@ -212,7 +264,7 @@ export default function SummaryCards({ selectedProgram }) {
         {open.tools ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              {/* Tabs */}
+              {/* T&S Tabs */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setTnsTab("total")}
@@ -225,6 +277,7 @@ export default function SummaryCards({ selectedProgram }) {
                 >
                   T&S Total
                 </button>
+
                 <button
                   onClick={() => setTnsTab("details")}
                   className={[
@@ -266,7 +319,7 @@ export default function SummaryCards({ selectedProgram }) {
 
             <div className="mt-5">
               {tnsTab === "total" ? (
-                // ✅ Month slider ONLY on T&S Total
+                // Slider only on Total tabs
                 <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter={true} />
               ) : (
                 <ToolsServicesDetails
@@ -307,6 +360,7 @@ export default function SummaryCards({ selectedProgram }) {
                 >
                   External Total
                 </button>
+
                 <button
                   onClick={() => setExternalTab("details")}
                   className={[
@@ -348,7 +402,7 @@ export default function SummaryCards({ selectedProgram }) {
 
             <div className="mt-5">
               {externalTab === "total" ? (
-                // ✅ Month slider ONLY on External Total
+                // Slider only on Total tabs
                 <MonthTable title="External" rows={externalMonthlyRows} showMonthFilter={true} />
               ) : (
                 <div className="space-y-5">
@@ -371,7 +425,7 @@ export default function SummaryCards({ selectedProgram }) {
         ) : null}
       </div>
 
-      {/* Keep change log data in storage for your separate Change Log page */}
+      {/* Keep changelog arrays alive for the separate Change Log page */}
       <div className="hidden">
         {externalChangeLog.length}
         {tnsChangeLog.length}
