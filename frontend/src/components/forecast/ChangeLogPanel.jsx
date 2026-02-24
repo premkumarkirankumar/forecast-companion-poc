@@ -1,59 +1,50 @@
-export default function ChangeLogPanel({
-  programKey,
-  actor,
-  setActor,
-  changeLog,
-  setChangeLog,
-}) {
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-gray-900">Change Log</div>
+export default function ChangeLogPanel({ programKey, changeLog, actor }) {
+  const items = Array.isArray(changeLog) ? changeLog : [];
 
-        <div className="flex items-center gap-2">
-          <input
-            className="w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
-            value={actor}
-            onChange={(e) => setActor(e.target.value)}
-            placeholder="Your name"
-          />
-          <button
-            onClick={() => {
-              if (confirm(`Clear change log for ${programKey}?`)) setChangeLog([]);
-            }}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-          >
-            Clear Log
-          </button>
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-lg font-bold text-gray-900">Change Log</div>
+          <div className="mt-1 text-sm text-gray-600">
+            Program: <span className="font-semibold">{programKey}</span>
+          </div>
+        </div>
+
+        <div className="text-xs font-semibold text-gray-500">
+          Showing latest {Math.min(items.length, 300)}
         </div>
       </div>
 
-      <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-gray-100">
-        {changeLog.length === 0 ? (
-          <div className="p-3 text-sm text-gray-600">No changes recorded yet.</div>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {changeLog.slice(0, 60).map((c) => (
-              <li key={c.id} className="p-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium text-gray-900">
-                    {c.actor} • {c.action}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(c.ts).toLocaleString()}
-                  </div>
+      <div className="mt-4 space-y-3">
+        {items.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+            No changes logged yet.
+          </div>
+        ) : null}
+
+        {items.map((e) => {
+          const who = e?.actor || actor || "Unknown";
+          const ts = e?.ts ? new Date(e.ts).toLocaleString() : "";
+
+          return (
+            <div key={e.id} className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-bold text-gray-900">
+                  {e?.area ? `${e.area} — ` : ""}
+                  {e?.action || "CHANGE"}
                 </div>
-                <div className="mt-1 text-xs text-gray-600">
-                  {c.entityType}:{c.entityName || c.entityId}
-                  {c.field ? ` • ${c.field}` : ""}
-                  {c.from !== undefined || c.to !== undefined
-                    ? ` • ${String(c.from)} → ${String(c.to)}`
-                    : ""}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                <div className="text-xs font-semibold text-gray-500">{ts}</div>
+              </div>
+
+              <div className="mt-1 text-sm text-gray-700">{e?.detail || ""}</div>
+
+              <div className="mt-2 text-xs text-gray-500">
+                By <span className="font-semibold text-gray-700">{who}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

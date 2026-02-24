@@ -1,14 +1,18 @@
+// frontend/src/components/forecast/SummaryCards.jsx
 import { useEffect, useMemo, useState } from "react";
 import { MONTHS } from "../../data/hub";
 
 import SectionHeader from "./SectionHeader";
 import MonthTable from "./MonthTable";
+
 import ExternalContractorsDetails from "./ExternalContractorsDetails";
 import ExternalSowDetails from "./ExternalSowDetails";
+
+import ToolsServicesDetails from "./ToolsServicesDetails";
 import ChangeLogPanel from "./ChangeLogPanel";
 
 /* =========================================================
-   LocalStorage hook (per key)
+   LocalStorage hook
    ========================================================= */
 function useLocalStorageState(key, initialValue) {
   const [state, setState] = useState(() => {
@@ -58,37 +62,53 @@ function computeRollup(items) {
 export default function SummaryCards({ selectedProgram }) {
   const programKey = selectedProgram || "connected";
 
+  // External keys
   const contractorsKey = `pfc.${programKey}.external.contractors`;
   const sowKey = `pfc.${programKey}.external.sow`;
-  const changelogKey = `pfc.${programKey}.changelog`;
+  const externalChangelogKey = `pfc.${programKey}.external.changelog`;
+
+  // T&S keys
+  const tnsItemsKey = `pfc.${programKey}.tns.items`;
+  const tnsChangelogKey = `pfc.${programKey}.tns.changelog`;
+
+  // Global keys
   const actorKey = `pfc.actor`;
 
+  // UI keys
   const openKey = `pfc.${programKey}.ui.openSections`;
   const externalTabKey = `pfc.${programKey}.ui.externalTab`; // total|details
+  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`; // total|details
 
   const [actor, setActor] = useLocalStorageState(actorKey, "Neo");
+
+  // External state
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
   const [sows, setSows] = useLocalStorageState(sowKey, []);
-  const [changeLog, setChangeLog] = useLocalStorageState(changelogKey, []);
+  const [externalChangeLog, setExternalChangeLog] = useLocalStorageState(
+    externalChangelogKey,
+    []
+  );
+
+  // T&S state
+  const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
+  const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
 
   const [open, setOpen] = useLocalStorageState(openKey, {
     internal: true,
-    tools: false,
+    tools: true,
     external: true,
   });
 
   const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
+  const [tnsTab, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
+  // Internal placeholders (you can wire later)
   const internalRows = useMemo(
     () => [{ label: "Internal", msByMonth: emptyMonthMap(), nfByMonth: emptyMonthMap() }],
     [programKey]
   );
 
-  const toolsRows = useMemo(
-    () => [{ label: "Tools & Services", msByMonth: emptyMonthMap(), nfByMonth: emptyMonthMap() }],
-    [programKey]
-  );
-
+  // External rollups -> monthly rows
   const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
   const sowRollup = useMemo(() => computeRollup(sows), [sows]);
 
@@ -107,7 +127,20 @@ export default function SummaryCards({ selectedProgram }) {
     ];
   }, [contractorsRollup, sowRollup]);
 
-  function logChange(payload) {
+  // T&S rollup -> single monthly row
+  const tnsRollup = useMemo(() => computeRollup(tnsItems), [tnsItems]);
+
+  const tnsMonthlyRows = useMemo(() => {
+    return [
+      {
+        label: "Tools & Services",
+        msByMonth: tnsRollup.msByMonth,
+        nfByMonth: tnsRollup.nfByMonth,
+      },
+    ];
+  }, [tnsRollup]);
+
+  function logExternal(payload) {
     const entry = {
       id: crypto.randomUUID(),
       ts: new Date().toISOString(),
@@ -115,11 +148,23 @@ export default function SummaryCards({ selectedProgram }) {
       program: programKey,
       ...payload,
     };
-    setChangeLog((prev) => [entry, ...prev].slice(0, 300));
+    setExternalChangeLog((prev) => [entry, ...prev].slice(0, 300));
+  }
+
+  function logTns(payload) {
+    const entry = {
+      id: crypto.randomUUID(),
+      ts: new Date().toISOString(),
+      actor,
+      program: programKey,
+      ...payload,
+    };
+    setTnsChangeLog((prev) => [entry, ...prev].slice(0, 300));
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -157,18 +202,89 @@ export default function SummaryCards({ selectedProgram }) {
         ) : null}
       </div>
 
-      {/* TOOLS */}
+      {/* TOOLS & SERVICES (T&S) */}
       <div className="space-y-3">
         <SectionHeader
           title="Tools & Services"
-          subtitle="Placeholder (wire tools/services data later)"
+          subtitle=""
           accent="purple"
           isOpen={!!open.tools}
           onToggle={() => setOpen((s) => ({ ...s, tools: !s.tools }))}
         />
+
         {open.tools ? (
           <div className="space-y-4">
-            <MonthTable title="Tools & Services — Monthly View" rows={toolsRows} />
+            {/* T&S Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTnsTab("total")}
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
+                    tnsTab === "total"
+                      ? "bg-gray-900 text-white ring-gray-900"
+                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  T&amp;S Total
+                </button>
+
+                <button
+                  onClick={() => setTnsTab("details")}
+                  className={[
+                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
+                    tnsTab === "details"
+                      ? "bg-gray-900 text-white ring-gray-900"
+                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  T&amp;S Details
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (confirm(`Clear saved Tools & Services for ${programKey}?`))
+                      setTnsItems([]);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                >
+                  Reset T&amp;S
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (confirm(`Clear T&S change log for ${programKey}?`)) setTnsChangeLog([]);
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                >
+                  Reset T&amp;S Log
+                </button>
+              </div>
+            </div>
+
+            {tnsTab === "total" ? (
+              <div className="space-y-4">
+                <MonthTable title="T&S — Monthly View" rows={tnsMonthlyRows} showMonthFilter={true} />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <ToolsServicesDetails
+                  programKey={programKey}
+                  items={tnsItems}
+                  setItems={setTnsItems}
+                  onLog={logTns}
+                />
+
+                {/* ✅ pass actor into changelog panel */}
+                <ChangeLogPanel
+                  programKey={programKey}
+                  changeLog={tnsChangeLog}
+                  actor={actor}
+                />
+              </div>
+            )}
           </div>
         ) : null}
       </div>
@@ -235,7 +351,6 @@ export default function SummaryCards({ selectedProgram }) {
 
             {externalTab === "total" ? (
               <div className="space-y-4">
-                {/* ✅ Month slider filter enabled ONLY here */}
                 <MonthTable
                   title="External — Monthly View"
                   rows={externalMonthlyRows}
@@ -248,17 +363,22 @@ export default function SummaryCards({ selectedProgram }) {
                   programKey={programKey}
                   contractors={contractors}
                   setContractors={setContractors}
-                  onLog={logChange}
+                  onLog={logExternal}
                 />
 
                 <ExternalSowDetails
                   programKey={programKey}
                   sows={sows}
                   setSows={setSows}
-                  onLog={logChange}
+                  onLog={logExternal}
                 />
 
-                <ChangeLogPanel programKey={programKey} changeLog={changeLog} />
+                {/* ✅ pass actor into changelog panel */}
+                <ChangeLogPanel
+                  programKey={programKey}
+                  changeLog={externalChangeLog}
+                  actor={actor}
+                />
               </div>
             )}
           </div>
