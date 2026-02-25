@@ -1,7 +1,7 @@
 // frontend/src/components/forecast/SummaryCards.jsx
 
 import { addAutoLogEntry } from "./autoLogStore";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MONTHS } from "../../data/hub";
 
 import MonthTable from "./MonthTable";
@@ -24,7 +24,7 @@ function useLocalStorageState(key, initialValue) {
     }
   });
 
-  // ✅ re-hydrate when key changes (program switch)
+  // re-hydrate when key changes (program switch)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -64,8 +64,6 @@ function computeRollup(items) {
   return { msByMonth, nfByMonth };
 }
 
-/** Wrap wide content so the PAGE doesn't horizontally scroll.
- *  The scrollbar stays inside the card/panel. */
 function ScrollFrame({ children, minWidthClass = "min-w-[1100px]" }) {
   return (
     <div className="w-full overflow-x-auto">
@@ -79,6 +77,13 @@ const PROGRAM_OPTIONS = [
   { value: "tre", label: "TRE" },
   { value: "csc", label: "CSC" },
 ];
+
+function formatBeforeAfter(before, after) {
+  const b = before === undefined ? "" : String(before);
+  const a = after === undefined ? "" : String(after);
+  if (!b && !a) return "";
+  return b === a ? `${a}` : `${b} → ${a}`;
+}
 
 export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const programKey = selectedProgram || "connected";
@@ -107,7 +112,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   // Actor (kept for changelog entries; no UI for it)
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
-  // Active section selection (now shown as top tabs instead of left sidebar)
+  // Active section selection
   const [activeSection, setActiveSection] = useLocalStorageState(activeSectionKey, "internal");
 
   // Tabs
@@ -121,87 +126,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   // External state
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
   const [sows, setSows] = useLocalStorageState(sowKey, []);
-
-  // External change log (program-specific)
   const [externalChangeLog, setExternalChangeLog] = useLocalStorageState(externalChangelogKey, []);
 
-  // T&S state  ✅ IMPORTANT: tnsItems must be declared BEFORE any watcher references it
+  // T&S state
   const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
-
-  // ✅ Debounced auto-log helper + watchers (moved HERE so tnsItems is initialized)
-  const autoLogTimerRef = useRef(null);
-  const didInitRef = useRef({
-    internal: false,
-    tns: false,
-    contractors: false,
-    sows: false,
-  });
-
-  function queueAutoLog(entry) {
-    if (autoLogTimerRef.current) clearTimeout(autoLogTimerRef.current);
-    autoLogTimerRef.current = setTimeout(() => {
-      addAutoLogEntry(entry);
-      autoLogTimerRef.current = null;
-    }, 350);
-  }
-
-  useEffect(() => {
-    if (!didInitRef.current.internal) {
-      didInitRef.current.internal = true;
-      return;
-    }
-    queueAutoLog({
-      program: programKey,
-      area: "Internal",
-      action: "Updated Internal",
-      details: `Internal labor updated (${internalLaborItems?.length ?? 0} row(s))`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [internalLaborItems]);
-
-  useEffect(() => {
-    if (!didInitRef.current.tns) {
-      didInitRef.current.tns = true;
-      return;
-    }
-    queueAutoLog({
-      program: programKey,
-      area: "Tools & Services",
-      action: "Updated Tools & Services",
-      details: `T&S updated (${tnsItems?.length ?? 0} item(s))`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tnsItems]);
-
-  useEffect(() => {
-    if (!didInitRef.current.contractors) {
-      didInitRef.current.contractors = true;
-      return;
-    }
-    queueAutoLog({
-      program: programKey,
-      area: "Contractors",
-      action: "Updated Contractors",
-      details: `Contractors updated (${contractors?.length ?? 0} item(s))`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractors]);
-
-  useEffect(() => {
-    if (!didInitRef.current.sows) {
-      didInitRef.current.sows = true;
-      return;
-    }
-    queueAutoLog({
-      program: programKey,
-      area: "SOW",
-      action: "Updated SOW",
-      details: `SOW updated (${sows?.length ?? 0} item(s))`,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sows]);
-
-  // T&S change log (program-specific)
   const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
 
   // Rollups
@@ -235,6 +163,44 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     ];
   }, [tnsRollup]);
 
+  /**
+   * IMPORTANT:
+   * Auto logs must ONLY be written for real edit actions (add/edit/remove),
+   * NOT for navigation (program switch, tab click).
+   * So we only write auto logs when payload.kind === "edit".
+   */
+  function writeAutoLog(payload) {
+    if (!payload || payload.kind !== "edit") return;
+
+    const details =
+      payload.details ||
+      (payload.field
+        ? `${payload.label || ""} ${payload.field}: ${formatBeforeAfter(payload.before, payload.after)}`
+        : payload.message || "");
+
+    addAutoLogEntry({
+      program: programKey,
+      area: payload.area || "General",
+      action: payload.action || "Updated",
+      details: details,
+      meta: {
+        itemId: payload.itemId,
+        field: payload.field,
+        before: payload.before,
+        after: payload.after,
+      },
+    });
+  }
+
+  // INTERNAL edit logger (called from InternalLabor only when user edits)
+  function logInternal(payload) {
+    writeAutoLog({
+      ...payload,
+      area: payload?.area || "Internal",
+    });
+  }
+
+  // EXTERNAL edit logger
   function logExternal(payload) {
     const entry = {
       id: crypto.randomUUID(),
@@ -244,18 +210,14 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       ...payload,
     };
 
-    // existing manual-style log
+    // existing manual-style log (keep)
     setExternalChangeLog((prev) => [entry, ...prev].slice(0, 300));
 
-    // ✅ NEW: auto log entry
-    addAutoLogEntry({
-      program: programKey,
-      area: payload?.area || "External",
-      action: payload?.action || "Updated External",
-      details: payload?.details || payload?.message || "",
-    });
+    // new auto log (edit-only)
+    writeAutoLog(payload);
   }
 
+  // T&S edit logger
   function logTns(payload) {
     const entry = {
       id: crypto.randomUUID(),
@@ -265,16 +227,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       ...payload,
     };
 
-    // existing manual-style log
+    // existing manual-style log (keep)
     setTnsChangeLog((prev) => [entry, ...prev].slice(0, 300));
 
-    // ✅ NEW: auto log entry
-    addAutoLogEntry({
-      program: programKey,
-      area: "Tools & Services",
-      action: payload?.action || "Updated Tools & Services",
-      details: payload?.details || payload?.message || "",
-    });
+    // new auto log (edit-only)
+    writeAutoLog({ ...payload, area: payload?.area || "Tools & Services" });
   }
 
   // --- Styling maps (subtle, consistent) ---
@@ -344,13 +301,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
   return (
     <div className="space-y-4">
-      {/* Forecast Companion + Program + top section tabs (SIDE BY SIDE) */}
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-[280px]">
             <div className="text-xl font-extrabold text-gray-900">Forecast Companion</div>
 
-            {/* Program dropdown */}
             <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
               <span className="text-gray-500">Program:</span>
               <select
@@ -367,7 +322,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </div>
           </div>
 
-          {/* Top tabs instead of left sidebar */}
           <div className="flex w-full flex-wrap gap-3 md:w-auto">
             <TopPill id="internal" />
             <TopPill id="tools" />
@@ -376,9 +330,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         </div>
       </div>
 
-      {/* Full-width content panel (left-aligned, more real estate) */}
       <div className={["rounded-3xl border p-5 shadow-sm", activeMeta.panel].join(" ")}>
-        {/* Section header */}
         <div className="mb-4">
           <div className={["text-lg font-extrabold", activeMeta.header].join(" ")}>
             {activeMeta.title}
@@ -420,6 +372,8 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 onClick={() => {
                   if (confirm(`Clear saved Internal labor items for ${programKey}?`)) {
                     setInternalLaborItems([]);
+                    // (optional) you can log reset as an edit if you want:
+                    // logInternal({ kind:"edit", action:"Reset Internal", area:"Internal", details:"Cleared internal labor items" });
                   }
                 }}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -429,7 +383,12 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </div>
 
             <div className="mt-5">
-              <InternalLabor mode={internalTab} items={internalLaborItems} setItems={setInternalLaborItems} />
+              <InternalLabor
+                mode={internalTab}
+                items={internalLaborItems}
+                setItems={setInternalLaborItems}
+                onLog={logInternal}   // ✅ NEW: internal edits can auto-log
+              />
             </div>
           </div>
         ) : null}
@@ -469,6 +428,8 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   onClick={() => {
                     if (confirm(`Clear saved Tools & Services for ${programKey}?`)) {
                       setTnsItems([]);
+                      // optional log:
+                      // logTns({ kind:"edit", action:"Reset Tools & Services", area:"Tools & Services", details:"Cleared Tools & Services items" });
                     }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -495,7 +456,12 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter />
                 </ScrollFrame>
               ) : (
-                <ToolsServicesDetails programKey={programKey} items={tnsItems} setItems={setTnsItems} onLog={logTns} />
+                <ToolsServicesDetails
+                  programKey={programKey}
+                  items={tnsItems}
+                  setItems={setTnsItems}
+                  onLog={logTns} // ✅ only logs if child sends {kind:"edit", ...}
+                />
               )}
             </div>
           </div>
@@ -536,6 +502,8 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   onClick={() => {
                     if (confirm(`Clear saved Contractors for ${programKey}?`)) {
                       setContractors([]);
+                      // optional log:
+                      // logExternal({ kind:"edit", area:"External Contractors", action:"Reset Contractors", details:"Cleared contractor items" });
                     }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -547,6 +515,8 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   onClick={() => {
                     if (confirm(`Clear saved SOWs for ${programKey}?`)) {
                       setSows([]);
+                      // optional log:
+                      // logExternal({ kind:"edit", area:"External SOW", action:"Reset SOW", details:"Cleared SOW items" });
                     }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -567,15 +537,19 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                     programKey={programKey}
                     contractors={contractors}
                     setContractors={setContractors}
-                    onLog={logExternal}
+                    onLog={logExternal} // ✅ child must send kind:"edit"
                   />
 
-                  <ExternalSowDetails programKey={programKey} sows={sows} setSows={setSows} onLog={logExternal} />
+                  <ExternalSowDetails
+                    programKey={programKey}
+                    sows={sows}
+                    setSows={setSows}
+                    onLog={logExternal} // ✅ child must send kind:"edit"
+                  />
                 </div>
               )}
             </div>
 
-            {/* Keep changelog arrays alive for the separate Change Log page */}
             <div className="sr-only">
               {externalChangeLog.length} {tnsChangeLog.length}
             </div>

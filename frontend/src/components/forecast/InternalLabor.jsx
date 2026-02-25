@@ -35,7 +35,7 @@ function computeStats(items) {
   };
 }
 
-export default function InternalLabor({ mode, items, setItems }) {
+export default function InternalLabor({ mode, items, setItems, onLog }) {
   const stats = useMemo(() => computeStats(items), [items]);
 
   // Add form draft
@@ -62,17 +62,59 @@ export default function InternalLabor({ mode, items, setItems }) {
     };
 
     setItems((prev) => [newItem, ...(prev || [])]);
+
+    // ✅ log add (editable action)
+    onLog?.({
+      action: "ADD_INTERNAL",
+      entityType: "internal",
+      entityId: newItem.id,
+      entityName: newItem.name,
+    });
+
     setDraft({ name: "", runPct: "", growthPct: "" });
   }
 
   function removeItem(id) {
+    const existing = (items || []).find((x) => x.id === id);
+
+    // ✅ log remove (editable action)
+    onLog?.({
+      action: "REMOVE_INTERNAL",
+      entityType: "internal",
+      entityId: id,
+      entityName: existing?.name,
+    });
+
     setItems((prev) => (prev || []).filter((x) => x.id !== id));
   }
 
   function updateItem(id, patch) {
-    setItems((prev) =>
-      (prev || []).map((x) => (x.id === id ? { ...x, ...patch } : x))
-    );
+    setItems((prev) => {
+      const list = prev || [];
+      const existing = list.find((x) => x.id === id);
+      if (!existing) return prev;
+
+      // ✅ log per-field changes with before/after (editable action)
+      for (const field of Object.keys(patch || {})) {
+        const before = existing?.[field];
+        const after = patch?.[field];
+
+        // avoid noisy logs
+        if (String(before ?? "") === String(after ?? "")) continue;
+
+        onLog?.({
+          action: "UPDATE_INTERNAL",
+          entityType: "internal",
+          entityId: id,
+          entityName: existing?.name,
+          field,
+          from: before,
+          to: after,
+        });
+      }
+
+      return list.map((x) => (x.id === id ? { ...x, ...patch } : x));
+    });
   }
 
   // TOTAL VIEW

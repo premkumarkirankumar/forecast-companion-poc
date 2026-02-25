@@ -228,33 +228,48 @@ export default function ExternalContractorsDetails({
 
   function updateName(id, name) {
     const existing = contractors.find((c) => c.id === id);
-    updateContractor(id, (c) => ({ ...c, name }));
+    const before = String(existing?.name ?? "");
+    const after = String(name ?? "");
+
+    // ✅ avoid noisy logs
+    if (before === after) return;
+
+    updateContractor(id, (c) => ({ ...c, name: after }));
+
     onLog?.({
       action: "UPDATE_CONTRACTOR_NAME",
       entityType: "contractor",
       entityId: id,
       entityName: existing?.name,
       field: "name",
-      from: existing?.name,
-      to: name,
+      from: before,
+      to: after,
     });
   }
 
   function updateSplit(id, msPct, nfPct) {
     const existing = contractors.find((c) => c.id === id);
-    updateContractor(id, (c) => {
-      const split = normalizeSplit(msPct, nfPct);
-      const next = { ...c, ...split };
-      return recomputeFromYearTarget(next);
-    });
+    const nextSplit = normalizeSplit(msPct, nfPct);
 
-    onLog?.({
-      action: "UPDATE_SPLIT",
-      entityType: "contractor",
-      entityId: id,
-      entityName: existing?.name,
-      field: "split",
-      meta: { msPct, nfPct },
+    // ✅ log only if changed
+    if (
+      Number(existing?.msPct ?? 0) !== Number(nextSplit.msPct) ||
+      Number(existing?.nfPct ?? 0) !== Number(nextSplit.nfPct)
+    ) {
+      onLog?.({
+        action: "UPDATE_SPLIT",
+        entityType: "contractor",
+        entityId: id,
+        entityName: existing?.name,
+        field: "split",
+        from: { msPct: existing?.msPct, nfPct: existing?.nfPct },
+        to: { msPct: nextSplit.msPct, nfPct: nextSplit.nfPct },
+      });
+    }
+
+    updateContractor(id, (c) => {
+      const next = { ...c, ...nextSplit };
+      return recomputeFromYearTarget(next);
     });
   }
 
@@ -263,17 +278,24 @@ export default function ExternalContractorsDetails({
     const val = Number.isFinite(v) ? v : 0;
 
     const existing = contractors.find((c) => c.id === id);
+    const before = num(existing?.yearTargetTotal ?? 0);
+
+    // ✅ avoid noisy logs
+    if (before === val) return;
+
     onLog?.({
       action: "UPDATE_YEAR_TARGET",
       entityType: "contractor",
       entityId: id,
       entityName: existing?.name,
       field: "yearTargetTotal",
-      from: existing?.yearTargetTotal,
+      from: before,
       to: val,
     });
 
-    updateContractor(id, (c) => recomputeFromYearTarget({ ...c, yearTargetTotal: val }));
+    updateContractor(id, (c) =>
+      recomputeFromYearTarget({ ...c, yearTargetTotal: val })
+    );
   }
 
   function setMonthValue(id, kind, month, value) {
@@ -281,8 +303,15 @@ export default function ExternalContractorsDetails({
     const val = Number.isFinite(v) ? v : 0;
 
     const existing = contractors.find((c) => c.id === id);
-    const from =
-      kind === "ms" ? existing?.msLocked?.[month] : existing?.nfLocked?.[month];
+
+    // ✅ "before" should be what user sees in the grid, not locked (locked can be undefined)
+    const before =
+      kind === "ms"
+        ? num(existing?.msByMonth?.[month] ?? 0)
+        : num(existing?.nfByMonth?.[month] ?? 0);
+
+    // ✅ avoid noisy logs
+    if (before === val) return;
 
     onLog?.({
       action: kind === "ms" ? "EDIT_MS_MONTH" : "EDIT_NF_MONTH",
@@ -290,7 +319,7 @@ export default function ExternalContractorsDetails({
       entityId: id,
       entityName: existing?.name,
       field: `${kind}.${month}`,
-      from,
+      from: before,
       to: val,
     });
 
@@ -299,6 +328,67 @@ export default function ExternalContractorsDetails({
       const next = { ...c, [lockedKey]: { ...c[lockedKey], [month]: val } };
       return recomputeFromYearTarget(next);
     });
+  }
+
+  // ✅ NEW: Log only when these editable fields change (before → after)
+  function setRatePerHour(id, value) {
+    const val = num(value);
+    const existing = contractors.find((c) => c.id === id);
+    const before = num(existing?.ratePerHour ?? 0);
+
+    if (before === val) return;
+
+    onLog?.({
+      action: "UPDATE_RATE_PER_HOUR",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "ratePerHour",
+      from: before,
+      to: val,
+    });
+
+    updateContractor(id, (c) => ({ ...c, ratePerHour: val }));
+  }
+
+  function setHoursPerWeek(id, value) {
+    const val = num(value);
+    const existing = contractors.find((c) => c.id === id);
+    const before = num(existing?.hoursPerWeek ?? 0);
+
+    if (before === val) return;
+
+    onLog?.({
+      action: "UPDATE_HOURS_PER_WEEK",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "hoursPerWeek",
+      from: before,
+      to: val,
+    });
+
+    updateContractor(id, (c) => ({ ...c, hoursPerWeek: val }));
+  }
+
+  function setWeeksPerYear(id, value) {
+    const val = num(value);
+    const existing = contractors.find((c) => c.id === id);
+    const before = num(existing?.weeksPerYear ?? 0);
+
+    if (before === val) return;
+
+    onLog?.({
+      action: "UPDATE_WEEKS_PER_YEAR",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "weeksPerYear",
+      from: before,
+      to: val,
+    });
+
+    updateContractor(id, (c) => ({ ...c, weeksPerYear: val }));
   }
 
   function regenerateFromRateHoursWeeks(id) {
@@ -517,23 +607,17 @@ export default function ExternalContractorsDetails({
                       <SmallField
                         label="Rate/hr"
                         value={c.ratePerHour}
-                        onChange={(v) =>
-                          updateContractor(c.id, (x) => ({ ...x, ratePerHour: v }))
-                        }
+                        onChange={(v) => setRatePerHour(c.id, v)}
                       />
                       <SmallField
                         label="Hours/week"
                         value={c.hoursPerWeek}
-                        onChange={(v) =>
-                          updateContractor(c.id, (x) => ({ ...x, hoursPerWeek: v }))
-                        }
+                        onChange={(v) => setHoursPerWeek(c.id, v)}
                       />
                       <SmallField
                         label="Weeks/year"
                         value={c.weeksPerYear}
-                        onChange={(v) =>
-                          updateContractor(c.id, (x) => ({ ...x, weeksPerYear: v }))
-                        }
+                        onChange={(v) => setWeeksPerYear(c.id, v)}
                       />
                       <SmallField
                         label="MS %"
@@ -601,7 +685,9 @@ export default function ExternalContractorsDetails({
                                     "outline-none focus:ring-2 focus:ring-gray-200",
                                   ].join(" ")}
                                   value={Math.round(c.msByMonth?.[m] ?? 0)}
-                                  onChange={(e) => setMonthValue(c.id, "ms", m, e.target.value)}
+                                  onChange={(e) =>
+                                    setMonthValue(c.id, "ms", m, e.target.value)
+                                  }
                                 />
                               </td>
                             ))}
@@ -627,7 +713,9 @@ export default function ExternalContractorsDetails({
                                     "outline-none focus:ring-2 focus:ring-gray-200",
                                   ].join(" ")}
                                   value={Math.round(c.nfByMonth?.[m] ?? 0)}
-                                  onChange={(e) => setMonthValue(c.id, "nf", m, e.target.value)}
+                                  onChange={(e) =>
+                                    setMonthValue(c.id, "nf", m, e.target.value)
+                                  }
                                 />
                               </td>
                             ))}
