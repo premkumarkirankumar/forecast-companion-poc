@@ -223,15 +223,7 @@ export default function SummaryCards({ selectedProgram }) {
             <div className="text-xl font-extrabold text-gray-900">Forecast Companion</div>
             <div className="mt-1 text-sm text-gray-600">Program: {programKey}</div>
           </div>
-
           <div className="flex items-center gap-3">
-            <div className="text-sm font-semibold text-gray-700">Actor</div>
-            <input
-              value={actor}
-              onChange={(e) => setActor(e.target.value)}
-              className="w-56 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
-              placeholder="Your name"
-            />
           </div>
         </div>
       </div>
