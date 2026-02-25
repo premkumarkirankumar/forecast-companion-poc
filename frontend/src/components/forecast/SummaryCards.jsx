@@ -273,18 +273,30 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       subtitle: "Internal labor (FTE) totals and assumptions",
       panel: "border-orange-200 bg-orange-50/60",
       header: "text-orange-900",
+      pill: {
+        active: "border-orange-300 bg-orange-100 text-orange-900",
+        idle: "border-gray-200 bg-white text-gray-900 hover:bg-orange-50",
+      },
     },
     tools: {
       title: "Tools & Services",
       subtitle: "Forecast tracking for tools and shared services",
       panel: "border-purple-200 bg-purple-50/60",
       header: "text-purple-950",
+      pill: {
+        active: "border-purple-300 bg-purple-100 text-purple-900",
+        idle: "border-gray-200 bg-white text-gray-900 hover:bg-purple-50",
+      },
     },
     external: {
       title: "External",
       subtitle: "External contractors and SOW tracking",
       panel: "border-green-200 bg-green-50/60",
       header: "text-green-950",
+      pill: {
+        active: "border-green-300 bg-green-100 text-green-900",
+        idle: "border-gray-200 bg-white text-gray-900 hover:bg-green-50",
+      },
     },
   };
 
@@ -301,9 +313,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         className={[
           "flex items-start gap-3 rounded-2xl border px-4 py-3 text-left shadow-sm transition",
           "min-w-[240px] md:min-w-[260px]",
-          isActive
-            ? "border-gray-900 bg-gray-900 text-white"
-            : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
+          isActive ? meta.pill.active : meta.pill.idle,
         ].join(" ")}
       >
         <div className="flex-1">
@@ -321,41 +331,37 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     <div className="w-full">
       {/* Header */}
       <div className="px-6 pt-6">
-        <div className="text-2xl font-extrabold text-gray-900">
-          Forecast Companion
-        </div>
+        {/* ✅ Removed duplicate title "Forecast Companion" */}
 
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <div className="text-sm font-semibold text-gray-700">Program:</div>
-          <select
-            value={programKey}
-            onChange={(e) => onProgramChange?.(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
-          >
-            {PROGRAM_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* ✅ Program bigger + pills moved to top-right */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-xl font-extrabold text-gray-900">Program</div>
+            <select
+              value={programKey}
+              onChange={(e) => onProgramChange?.(e.target.value)}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-base font-extrabold text-gray-900 shadow-sm"
+            >
+              {PROGRAM_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Top pills */}
-        <div className="mt-5 flex flex-wrap gap-3">
-          <TopPill id="internal" />
-          <TopPill id="tools" />
-          <TopPill id="external" />
+          {/* Top pills (top-right) */}
+          <div className="flex flex-wrap gap-3 lg:justify-end">
+            <TopPill id="internal" />
+            <TopPill id="tools" />
+            <TopPill id="external" />
+          </div>
         </div>
       </div>
 
       {/* Active section container */}
       <div className="px-6 pb-10">
-        <div
-          className={[
-            "mt-6 rounded-3xl border p-6",
-            activeMeta.panel,
-          ].join(" ")}
-        >
+        <div className={["mt-6 rounded-3xl border p-6", activeMeta.panel].join(" ")}>
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className={["text-xl font-extrabold", activeMeta.header].join(" ")}>
@@ -394,11 +400,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (
-                      confirm(
-                        `Clear saved Internal labor items for ${programKey}?`
-                      )
-                    ) {
+                    if (confirm(`Clear saved Internal labor items for ${programKey}?`)) {
                       setInternalLaborItems([]);
                     }
                   }}
@@ -545,11 +547,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
               {/* ✅ Show BOTH: Total first (with month range slider), Details below */}
               <div className="mt-5">
-                <MonthTable
-                  title="External"
-                  rows={externalMonthlyRows}
-                  showMonthFilter={true}
-                />
+                <MonthTable title="External" rows={externalMonthlyRows} showMonthFilter={true} />
               </div>
 
               <div className="mt-6 border-t pt-6 space-y-6">
