@@ -170,24 +170,31 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
    * So we only write auto logs when payload.kind === "edit".
    */
   function writeAutoLog(payload) {
-    if (!payload || payload.kind !== "edit") return;
+    if (!payload) return;
+
+    // If caller explicitly sets kind and it's NOT edit, skip.
+    // If kind is missing (current files), treat onLog as an edit action.
+    if (payload.kind && payload.kind !== "edit") return;
+
+    const before = payload.before ?? payload.from;
+    const after = payload.after ?? payload.to;
 
     const details =
       payload.details ||
       (payload.field
-        ? `${payload.label || ""} ${payload.field}: ${formatBeforeAfter(payload.before, payload.after)}`
+        ? `${payload.label || ""} ${payload.field}: ${formatBeforeAfter(before, after)}`
         : payload.message || "");
 
     addAutoLogEntry({
       program: programKey,
       area: payload.area || "General",
       action: payload.action || "Updated",
-      details: details,
+      details,
       meta: {
         itemId: payload.itemId,
         field: payload.field,
-        before: payload.before,
-        after: payload.after,
+        before,
+        after,
       },
     });
   }
