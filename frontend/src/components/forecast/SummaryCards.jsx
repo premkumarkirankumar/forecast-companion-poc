@@ -1,19 +1,19 @@
 // frontend/src/components/forecast/SummaryCards.jsx
 
-import { addAutoLogEntry } from "./autoLogStore";
 import { useEffect, useMemo, useState } from "react";
 import { MONTHS } from "../../data/hub";
 
 import MonthTable from "./MonthTable";
 import InternalLabor from "./InternalLabor";
-
 import ExternalContractorsDetails from "./ExternalContractorsDetails";
 import ExternalSowDetails from "./ExternalSowDetails";
 import ToolsServicesDetails from "./ToolsServicesDetails";
 
+import { addAutoLogEntry } from "./autoLogStore";
+
 /* =========================================================
    LocalStorage hook
-========================================================= */
+   ========================================================= */
 function useLocalStorageState(key, initialValue) {
   const [state, setState] = useState(() => {
     try {
@@ -49,7 +49,7 @@ function useLocalStorageState(key, initialValue) {
 
 /* =========================================================
    Helpers
-========================================================= */
+   ========================================================= */
 function computeRollup(items) {
   const msByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
   const nfByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
@@ -64,12 +64,33 @@ function computeRollup(items) {
   return { msByMonth, nfByMonth };
 }
 
-function ScrollFrame({ children, minWidthClass = "min-w-[1100px]" }) {
-  return (
-    <div className="w-full overflow-x-auto">
-      <div className={minWidthClass}>{children}</div>
-    </div>
-  );
+function formatBeforeAfter(before, after) {
+  const b = before === undefined ? "" : String(before);
+  const a = after === undefined ? "" : String(after);
+  if (!b && !a) return "";
+  return b === a ? `${a}` : `${b} → ${a}`;
+}
+
+/**
+ * Convert component onLog() payloads into AutoLog entries.
+ * IMPORTANT: Do NOT require payload.kind. Your components don't send it.
+ */
+function payloadToAutoDetails(payload) {
+  if (!payload) return "";
+
+  // Prefer explicit strings if present
+  if (payload.details) return String(payload.details);
+  if (payload.message) return String(payload.message);
+
+  const name = payload.entityName || payload.label || payload.entityType || "";
+  const field = payload.field ? ` ${payload.field}` : "";
+  const change =
+    payload.from !== undefined || payload.to !== undefined
+      ? `: ${formatBeforeAfter(payload.from, payload.to)}`
+      : "";
+
+  const out = `${name}${field}${change}`.trim();
+  return out || "";
 }
 
 const PROGRAM_OPTIONS = [
@@ -78,13 +99,9 @@ const PROGRAM_OPTIONS = [
   { value: "csc", label: "CSC" },
 ];
 
-function formatBeforeAfter(before, after) {
-  const b = before === undefined ? "" : String(before);
-  const a = after === undefined ? "" : String(after);
-  if (!b && !a) return "";
-  return b === a ? `${a}` : `${b} → ${a}`;
-}
-
+/* =========================================================
+   Main
+   ========================================================= */
 export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const programKey = selectedProgram || "connected";
 
@@ -93,9 +110,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
   // UI keys
   const activeSectionKey = `pfc.${programKey}.ui.activeSection`; // internal|tools|external
-  const internalTabKey = `pfc.${programKey}.ui.internalTab`; // total|details
-  const externalTabKey = `pfc.${programKey}.ui.externalTab`; // total|details
-  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`; // total|details
+  const internalTabKey = `pfc.${programKey}.ui.internalTab`; // total|details (kept, but we show both now)
+  const externalTabKey = `pfc.${programKey}.ui.externalTab`; // total|details (kept, but we show both now)
+  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`; // total|details (kept, but we show both now)
 
   // Internal keys
   const internalItemsKey = `pfc.${programKey}.internal.labor.items`;
@@ -109,31 +126,46 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const tnsItemsKey = `pfc.${programKey}.tns.items`;
   const tnsChangelogKey = `pfc.${programKey}.tns.changelog`;
 
-  // Actor (kept for changelog entries; no UI for it)
+  // Actor (kept for manual-style log entries; ChangeLogPage has its own manual author input)
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
   // Active section selection
-  const [activeSection, setActiveSection] = useLocalStorageState(activeSectionKey, "internal");
+  const [activeSection, setActiveSection] = useLocalStorageState(
+    activeSectionKey,
+    "internal"
+  );
 
-  // Tabs
-  const [internalTab, setInternalTab] = useLocalStorageState(internalTabKey, "total");
-  const [externalTab, setExternalTab] = useLocalStorageState(externalTabKey, "total");
-  const [tnsTab, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
+  // Tabs (we keep these so you don't lose stored UI state, but we won't hide content anymore)
+  const [, setInternalTab] = useLocalStorageState(internalTabKey, "total");
+  const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
+  const [, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
   // Internal state
-  const [internalLaborItems, setInternalLaborItems] = useLocalStorageState(internalItemsKey, []);
+  const [internalLaborItems, setInternalLaborItems] = useLocalStorageState(
+    internalItemsKey,
+    []
+  );
 
   // External state
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
   const [sows, setSows] = useLocalStorageState(sowKey, []);
-  const [externalChangeLog, setExternalChangeLog] = useLocalStorageState(externalChangelogKey, []);
+  const [externalChangeLog, setExternalChangeLog] = useLocalStorageState(
+    externalChangelogKey,
+    []
+  );
 
   // T&S state
   const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
-  const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
+  const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(
+    tnsChangelogKey,
+    []
+  );
 
   // Rollups
-  const contractorsRollup = useMemo(() => computeRollup(contractors), [contractors]);
+  const contractorsRollup = useMemo(
+    () => computeRollup(contractors),
+    [contractors]
+  );
   const sowRollup = useMemo(() => computeRollup(sows), [sows]);
 
   const externalMonthlyRows = useMemo(() => {
@@ -152,7 +184,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   }, [contractorsRollup, sowRollup]);
 
   const tnsRollup = useMemo(() => computeRollup(tnsItems), [tnsItems]);
-
   const tnsMonthlyRows = useMemo(() => {
     return [
       {
@@ -163,51 +194,45 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     ];
   }, [tnsRollup]);
 
-  /**
-   * IMPORTANT:
-   * Auto logs must ONLY be written for real edit actions (add/edit/remove),
-   * NOT for navigation (program switch, tab click).
-   * So we only write auto logs when payload.kind === "edit".
-   */
-  function writeAutoLog(payload) {
+  /* =========================================================
+     Logging (FIXED)
+     ========================================================= */
+
+  function writeAutoLog(payload, fallbackArea) {
     if (!payload) return;
 
-    // If caller explicitly sets kind and it's NOT edit, skip.
-    // If kind is missing (current files), treat onLog as an edit action.
-    if (payload.kind && payload.kind !== "edit") return;
-
-    const before = payload.before ?? payload.from;
-    const after = payload.after ?? payload.to;
-
-    const details =
-      payload.details ||
-      (payload.field
-        ? `${payload.label || ""} ${payload.field}: ${formatBeforeAfter(before, after)}`
-        : payload.message || "");
+    // ✅ No "kind" gating. Components already call onLog only for real edits.
+    const area =
+      payload.area ||
+      fallbackArea ||
+      (payload.entityType === "internal"
+        ? "Internal"
+        : payload.entityType === "tns"
+        ? "Tools & Services"
+        : "External");
 
     addAutoLogEntry({
       program: programKey,
-      area: payload.area || "General",
+      area,
       action: payload.action || "Updated",
-      details,
+      details: payloadToAutoDetails(payload),
       meta: {
-        itemId: payload.itemId,
+        entityType: payload.entityType,
+        entityId: payload.entityId,
+        entityName: payload.entityName,
         field: payload.field,
-        before,
-        after,
+        from: payload.from,
+        to: payload.to,
       },
     });
   }
 
-  // INTERNAL edit logger (called from InternalLabor only when user edits)
+  // Internal edit logger
   function logInternal(payload) {
-    writeAutoLog({
-      ...payload,
-      area: payload?.area || "Internal",
-    });
+    writeAutoLog(payload, "Internal");
   }
 
-  // EXTERNAL edit logger
+  // External edit logger
   function logExternal(payload) {
     const entry = {
       id: crypto.randomUUID(),
@@ -218,10 +243,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     };
 
     // existing manual-style log (keep)
-    setExternalChangeLog((prev) => [entry, ...prev].slice(0, 300));
+    setExternalChangeLog((prev) => [entry, ...(prev || [])].slice(0, 300));
 
-    // new auto log (edit-only)
-    writeAutoLog(payload);
+    // ✅ auto log (fixed)
+    writeAutoLog(payload, "External");
   }
 
   // T&S edit logger
@@ -235,41 +260,29 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     };
 
     // existing manual-style log (keep)
-    setTnsChangeLog((prev) => [entry, ...prev].slice(0, 300));
+    setTnsChangeLog((prev) => [entry, ...(prev || [])].slice(0, 300));
 
-    // new auto log (edit-only)
-    writeAutoLog({ ...payload, area: payload?.area || "Tools & Services" });
+    // ✅ auto log (fixed)
+    writeAutoLog(payload, "Tools & Services");
   }
 
-  // --- Styling maps (subtle, consistent) ---
+  // --- Styling maps (kept as-is from your branch) ---
   const sectionMeta = {
     internal: {
       title: "Internal",
       subtitle: "Internal labor (FTE) totals and assumptions",
-      pill: {
-        active: "border-orange-300 bg-orange-100 text-orange-900",
-        idle: "border-gray-200 bg-white text-gray-900 hover:bg-orange-50",
-      },
       panel: "border-orange-200 bg-orange-50/60",
       header: "text-orange-900",
     },
     tools: {
       title: "Tools & Services",
       subtitle: "Forecast tracking for tools and shared services",
-      pill: {
-        active: "border-purple-300 bg-purple-100 text-purple-900",
-        idle: "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
-      },
       panel: "border-purple-200 bg-purple-50/60",
       header: "text-purple-950",
     },
     external: {
       title: "External",
       subtitle: "External contractors and SOW tracking",
-      pill: {
-        active: "border-green-300 bg-green-100 text-green-900",
-        idle: "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
-      },
       panel: "border-green-200 bg-green-50/60",
       header: "text-green-950",
     },
@@ -280,6 +293,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const TopPill = ({ id }) => {
     const meta = sectionMeta[id];
     const isActive = activeSection === id;
+
     return (
       <button
         type="button"
@@ -287,19 +301,16 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         className={[
           "flex items-start gap-3 rounded-2xl border px-4 py-3 text-left shadow-sm transition",
           "min-w-[240px] md:min-w-[260px]",
-          isActive ? meta.pill.active : meta.pill.idle,
+          isActive
+            ? "border-gray-900 bg-gray-900 text-white"
+            : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
         ].join(" ")}
       >
         <div className="flex-1">
           <div className="text-sm font-extrabold">{meta.title}</div>
-          <div className="mt-0.5 text-xs font-medium text-gray-600">{meta.subtitle}</div>
+          <div className="mt-0.5 text-xs opacity-90">{meta.subtitle}</div>
         </div>
-        <div
-          className={[
-            "mt-0.5 rounded-full px-3 py-1 text-xs font-bold",
-            isActive ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-800",
-          ].join(" ")}
-        >
+        <div className="text-xs font-semibold opacity-90">
           {isActive ? "Open" : "View"}
         </div>
       </button>
@@ -307,136 +318,146 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-[280px]">
-            <div className="text-xl font-extrabold text-gray-900">Forecast Companion</div>
+    <div className="w-full">
+      {/* Header */}
+      <div className="px-6 pt-6">
+        <div className="text-2xl font-extrabold text-gray-900">
+          Forecast Companion
+        </div>
 
-            <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
-              <span className="text-gray-500">Program:</span>
-              <select
-                value={programKey}
-                onChange={(e) => onProgramChange?.(e.target.value)}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
-              >
-                {PROGRAM_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <div className="text-sm font-semibold text-gray-700">Program:</div>
+          <select
+            value={programKey}
+            onChange={(e) => onProgramChange?.(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
+          >
+            {PROGRAM_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="flex w-full flex-wrap gap-3 md:w-auto">
-            <TopPill id="internal" />
-            <TopPill id="tools" />
-            <TopPill id="external" />
-          </div>
+        {/* Top pills */}
+        <div className="mt-5 flex flex-wrap gap-3">
+          <TopPill id="internal" />
+          <TopPill id="tools" />
+          <TopPill id="external" />
         </div>
       </div>
 
-      <div className={["rounded-3xl border p-5 shadow-sm", activeMeta.panel].join(" ")}>
-        <div className="mb-4">
-          <div className={["text-lg font-extrabold", activeMeta.header].join(" ")}>
-            {activeMeta.title}
+      {/* Active section container */}
+      <div className="px-6 pb-10">
+        <div
+          className={[
+            "mt-6 rounded-3xl border p-6",
+            activeMeta.panel,
+          ].join(" ")}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className={["text-xl font-extrabold", activeMeta.header].join(" ")}>
+                {activeMeta.title}
+              </div>
+              <div className="mt-1 text-sm font-semibold text-gray-600">
+                {activeMeta.subtitle}
+              </div>
+            </div>
           </div>
-          <div className="mt-1 text-sm font-semibold text-gray-700">{activeMeta.subtitle}</div>
-        </div>
 
-        {/* INTERNAL */}
-        {activeSection === "internal" ? (
-          <div className="rounded-3xl border border-gray-200 bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex gap-2">
+          {/* =========================================================
+              INTERNAL
+             ========================================================= */}
+          {activeSection === "internal" ? (
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+              {/* Buttons kept (but content below always shows both now) */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setInternalTab("total")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
-                    internalTab === "total"
-                      ? "bg-gray-900 text-white ring-gray-900"
-                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
-                  ].join(" ")}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
                 >
                   Internal Total
                 </button>
-
                 <button
+                  type="button"
                   onClick={() => setInternalTab("details")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
-                    internalTab === "details"
-                      ? "bg-gray-900 text-white ring-gray-900"
-                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
-                  ].join(" ")}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
                 >
                   Internal Details
                 </button>
+
+                <div className="flex-1" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        `Clear saved Internal labor items for ${programKey}?`
+                      )
+                    ) {
+                      setInternalLaborItems([]);
+                    }
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                >
+                  Reset Internal
+                </button>
               </div>
 
-              <button
-                onClick={() => {
-                  if (confirm(`Clear saved Internal labor items for ${programKey}?`)) {
-                    setInternalLaborItems([]);
-                    // (optional) you can log reset as an edit if you want:
-                    // logInternal({ kind:"edit", action:"Reset Internal", area:"Internal", details:"Cleared internal labor items" });
-                  }
-                }}
-                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-              >
-                Reset Internal
-              </button>
-            </div>
+              {/* ✅ Show BOTH: Total first, Details below */}
+              <div className="mt-5">
+                <InternalLabor
+                  mode="total"
+                  items={internalLaborItems}
+                  setItems={setInternalLaborItems}
+                  onLog={logInternal}
+                />
+              </div>
 
-            <div className="mt-5">
-              <InternalLabor
-                mode={internalTab}
-                items={internalLaborItems}
-                setItems={setInternalLaborItems}
-                onLog={logInternal}   // ✅ NEW: internal edits can auto-log
-              />
+              <div className="mt-6 border-t pt-6">
+                <InternalLabor
+                  mode="details"
+                  items={internalLaborItems}
+                  setItems={setInternalLaborItems}
+                  onLog={logInternal}
+                />
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* TOOLS & SERVICES */}
-        {activeSection === "tools" ? (
-          <div className="rounded-3xl border border-gray-200 bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex gap-2">
+          {/* =========================================================
+              TOOLS & SERVICES
+             ========================================================= */}
+          {activeSection === "tools" ? (
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+              {/* Buttons kept (but content below always shows both now) */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setTnsTab("total")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
-                    tnsTab === "total"
-                      ? "bg-gray-900 text-white ring-gray-900"
-                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
-                  ].join(" ")}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
                 >
                   T&amp;S Total
                 </button>
-
                 <button
+                  type="button"
                   onClick={() => setTnsTab("details")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
-                    tnsTab === "details"
-                      ? "bg-gray-900 text-white ring-gray-900"
-                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
-                  ].join(" ")}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
                 >
                   T&amp;S Details
                 </button>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
+                <div className="flex-1" />
+
                 <button
+                  type="button"
                   onClick={() => {
                     if (confirm(`Clear saved Tools & Services for ${programKey}?`)) {
                       setTnsItems([]);
-                      // optional log:
-                      // logTns({ kind:"edit", action:"Reset Tools & Services", area:"Tools & Services", details:"Cleared Tools & Services items" });
                     }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -445,6 +466,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (confirm(`Clear T&S change log for ${programKey}?`)) {
                       setTnsChangeLog([]);
@@ -455,62 +477,52 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   Reset T&amp;S Log
                 </button>
               </div>
-            </div>
 
-            <div className="mt-5">
-              {tnsTab === "total" ? (
-                <ScrollFrame>
-                  <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter />
-                </ScrollFrame>
-              ) : (
+              {/* ✅ Show BOTH: Total first, Details below */}
+              <div className="mt-5">
+                <MonthTable title="Tools & Services" rows={tnsMonthlyRows} />
+              </div>
+
+              <div className="mt-6 border-t pt-6">
                 <ToolsServicesDetails
                   programKey={programKey}
                   items={tnsItems}
                   setItems={setTnsItems}
-                  onLog={logTns} // ✅ only logs if child sends {kind:"edit", ...}
+                  onLog={logTns}
                 />
-              )}
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* EXTERNAL */}
-        {activeSection === "external" ? (
-          <div className="rounded-3xl border border-gray-200 bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex gap-2">
+          {/* =========================================================
+              EXTERNAL
+             ========================================================= */}
+          {activeSection === "external" ? (
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+              {/* Buttons kept (but content below always shows both now) */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setExternalTab("total")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
-                    externalTab === "total"
-                      ? "bg-gray-900 text-white ring-gray-900"
-                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
-                  ].join(" ")}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
                 >
                   External Total
                 </button>
-
                 <button
+                  type="button"
                   onClick={() => setExternalTab("details")}
-                  className={[
-                    "rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition",
-                    externalTab === "details"
-                      ? "bg-gray-900 text-white ring-gray-900"
-                      : "bg-white text-gray-900 ring-gray-200 hover:bg-gray-50",
-                  ].join(" ")}
+                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
                 >
                   External Details
                 </button>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
+                <div className="flex-1" />
+
                 <button
+                  type="button"
                   onClick={() => {
                     if (confirm(`Clear saved Contractors for ${programKey}?`)) {
                       setContractors([]);
-                      // optional log:
-                      // logExternal({ kind:"edit", area:"External Contractors", action:"Reset Contractors", details:"Cleared contractor items" });
                     }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -519,11 +531,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     if (confirm(`Clear saved SOWs for ${programKey}?`)) {
                       setSows([]);
-                      // optional log:
-                      // logExternal({ kind:"edit", area:"External SOW", action:"Reset SOW", details:"Cleared SOW items" });
                     }
                   }}
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
@@ -531,37 +542,39 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   Reset SOWs
                 </button>
               </div>
-            </div>
 
-            <div className="mt-5">
-              {externalTab === "total" ? (
-                <ScrollFrame>
-                  <MonthTable title="External" rows={externalMonthlyRows} showMonthFilter />
-                </ScrollFrame>
-              ) : (
-                <div className="space-y-6">
-                  <ExternalContractorsDetails
-                    programKey={programKey}
-                    contractors={contractors}
-                    setContractors={setContractors}
-                    onLog={logExternal} // ✅ child must send kind:"edit"
-                  />
+              {/* ✅ Show BOTH: Total first (with month range slider), Details below */}
+              <div className="mt-5">
+                <MonthTable
+                  title="External"
+                  rows={externalMonthlyRows}
+                  showMonthFilter={true}
+                />
+              </div>
 
-                  <ExternalSowDetails
-                    programKey={programKey}
-                    sows={sows}
-                    setSows={setSows}
-                    onLog={logExternal} // ✅ child must send kind:"edit"
-                  />
-                </div>
-              )}
-            </div>
+              <div className="mt-6 border-t pt-6 space-y-6">
+                <ExternalContractorsDetails
+                  programKey={programKey}
+                  contractors={contractors}
+                  setContractors={setContractors}
+                  onLog={logExternal}
+                />
 
-            <div className="sr-only">
-              {externalChangeLog.length} {tnsChangeLog.length}
+                <ExternalSowDetails
+                  programKey={programKey}
+                  sows={sows}
+                  setSows={setSows}
+                  onLog={logExternal}
+                />
+              </div>
+
+              {/* (Debug counters: keep if you want, remove if noisy) */}
+              {/* <div className="mt-4 text-xs text-gray-500">
+                externalLog: {externalChangeLog.length} | tnsLog: {tnsChangeLog.length}
+              </div> */}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </div>
   );
