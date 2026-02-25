@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import SummaryCards from "./components/forecast/SummaryCards";
 import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
+import TrendsPage from "./components/forecast/TrendsPage";
 
 // simple seed for T&S (only used if you want to render ToolsServicesDetails directly)
 const seedTns = [
@@ -43,7 +44,7 @@ const seedTns = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState("dashboard"); // dashboard | changelog
+  const [page, setPage] = useState("dashboard"); // dashboard | changelog | trends
   const [selectedProgram, setSelectedProgram] = useState(() => {
     try {
       const raw = localStorage.getItem("pfc.ui.program");
@@ -61,8 +62,8 @@ export default function App() {
       // ignore
     }
   }, [selectedProgram]);
-  const [tnsItems, setTnsItems] = useState(seedTns);
 
+  const [tnsItems, setTnsItems] = useState(seedTns);
   const showToolsServicesOnly = useMemo(() => false, []);
 
   if (page === "changelog") {
@@ -76,22 +77,44 @@ export default function App() {
     );
   }
 
+  if (page === "trends") {
+    return (
+      <TrendsPage
+        selectedProgram={selectedProgram}
+        onBack={() => setPage("dashboard")}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar (full width, left aligned) */}
       <div className="border-b border-gray-200 bg-white">
         <div className="flex w-full items-center justify-between px-3 py-4">
           <div>
-            <div className="text-lg font-extrabold text-gray-900">Forecast Companion (POC)</div>
-            <div className="mt-1 text-sm text-gray-600">Internal • Tools & Services • External</div>
+            <div className="text-lg font-extrabold text-gray-900">
+              Forecast Companion (POC)
+            </div>
+            <div className="mt-1 text-sm text-gray-600">
+              Internal • Tools & Services • External
+            </div>
           </div>
 
-          <button
-            onClick={() => setPage("changelog")}
-            className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-          >
-            Change Log
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage("trends")}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+            >
+              Trends
+            </button>
+
+            <button
+              onClick={() => setPage("changelog")}
+              className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+            >
+              Change Log
+            </button>
+          </div>
         </div>
       </div>
 
@@ -100,9 +123,10 @@ export default function App() {
         {!showToolsServicesOnly ? (
           <SummaryCards
             selectedProgram={selectedProgram}
-            onProgramChange={setSelectedProgram} />
+            onProgramChange={setSelectedProgram}
+          />
         ) : (
-          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => { }} />
+          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />
         )}
       </div>
     </div>
