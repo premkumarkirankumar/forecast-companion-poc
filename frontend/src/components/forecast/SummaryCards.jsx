@@ -23,6 +23,17 @@ function useLocalStorageState(key, initialValue) {
     }
   });
 
+  // ✅ When key changes (program switch), re-hydrate from the new key
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      setState(raw ? JSON.parse(raw) : initialValue);
+    } catch {
+      setState(initialValue);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(state));
@@ -66,7 +77,7 @@ function ScrollFrame({ children, minWidthClass = "min-w-[1100px]" }) {
 /* =========================================================
    Main
 ========================================================= */
-export default function SummaryCards({ selectedProgram }) {
+export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const programKey = selectedProgram || "connected";
 
   // Global keys
@@ -221,7 +232,18 @@ export default function SummaryCards({ selectedProgram }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-xl font-extrabold text-gray-900">Forecast Companion</div>
-            <div className="mt-1 text-sm text-gray-600">Program: {programKey}</div>
+            <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-600">
+              <span>Program:</span>
+              <select
+                value={programKey}
+                onChange={(e) => onProgramChange?.(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900"
+              >
+                <option value="connected">Connected</option>
+                <option value="tre">TRE</option>
+                <option value="csc">CSC</option>
+              </select>
+            </div>
           </div>
           <div className="flex items-center gap-3">
           </div>

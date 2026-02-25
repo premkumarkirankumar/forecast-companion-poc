@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SummaryCards from "./components/forecast/SummaryCards";
 import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
@@ -44,6 +44,23 @@ const seedTns = [
 
 export default function App() {
   const [page, setPage] = useState("dashboard"); // dashboard | changelog
+  const [selectedProgram, setSelectedProgram] = useState(() => {
+    try {
+      const raw = localStorage.getItem("pfc.ui.program");
+      const v = raw ? JSON.parse(raw) : "connected";
+      return ["connected", "tre", "csc"].includes(v) ? v : "connected";
+    } catch {
+      return "connected";
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pfc.ui.program", JSON.stringify(selectedProgram));
+    } catch {
+      // ignore
+    }
+  }, [selectedProgram]);
   const [tnsItems, setTnsItems] = useState(seedTns);
 
   const showToolsServicesOnly = useMemo(() => false, []);
@@ -81,9 +98,11 @@ export default function App() {
       {/* Main Content (full width, left aligned) */}
       <div className="w-full px-3 py-5">
         {!showToolsServicesOnly ? (
-          <SummaryCards selectedProgram="default" />
+          <SummaryCards
+            selectedProgram={selectedProgram}
+            onProgramChange={setSelectedProgram} />
         ) : (
-          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />
+          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => { }} />
         )}
       </div>
     </div>
