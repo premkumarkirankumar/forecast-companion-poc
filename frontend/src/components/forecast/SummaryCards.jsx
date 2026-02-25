@@ -186,11 +186,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       title: "Internal",
       subtitle: "Internal labor (FTE) totals and assumptions",
       pill: {
-        active: "border-gray-300 bg-gray-100 text-gray-900",
-        idle: "border-gray-200 bg-white text-gray-900 hover:bg-gray-50",
+        active: "border-orange-300 bg-orange-100 text-orange-900",
+        idle: "border-gray-200 bg-white text-gray-900 hover:bg-orange-50",
       },
-      panel: "border-gray-200 bg-gray-50/70",
-      header: "text-gray-900",
+      panel: "border-orange-200 bg-orange-50/60",
+      header: "text-orange-900",
     },
     tools: {
       title: "Tools & Services",
