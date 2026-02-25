@@ -1,6 +1,7 @@
 // frontend/src/components/forecast/SummaryCards.jsx
 
-import { useEffect, useMemo, useState } from "react";
+import { addAutoLogEntry } from "./autoLogStore";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MONTHS } from "../../data/hub";
 
 import MonthTable from "./MonthTable";
@@ -12,7 +13,6 @@ import ToolsServicesDetails from "./ToolsServicesDetails";
 
 /* =========================================================
    LocalStorage hook
-   (unchanged behavior – only aesthetics changes requested)
 ========================================================= */
 function useLocalStorageState(key, initialValue) {
   const [state, setState] = useState(() => {
@@ -121,10 +121,87 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   // External state
   const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
   const [sows, setSows] = useLocalStorageState(sowKey, []);
+
+  // External change log (program-specific)
   const [externalChangeLog, setExternalChangeLog] = useLocalStorageState(externalChangelogKey, []);
 
-  // T&S state
+  // T&S state  ✅ IMPORTANT: tnsItems must be declared BEFORE any watcher references it
   const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
+
+  // ✅ Debounced auto-log helper + watchers (moved HERE so tnsItems is initialized)
+  const autoLogTimerRef = useRef(null);
+  const didInitRef = useRef({
+    internal: false,
+    tns: false,
+    contractors: false,
+    sows: false,
+  });
+
+  function queueAutoLog(entry) {
+    if (autoLogTimerRef.current) clearTimeout(autoLogTimerRef.current);
+    autoLogTimerRef.current = setTimeout(() => {
+      addAutoLogEntry(entry);
+      autoLogTimerRef.current = null;
+    }, 350);
+  }
+
+  useEffect(() => {
+    if (!didInitRef.current.internal) {
+      didInitRef.current.internal = true;
+      return;
+    }
+    queueAutoLog({
+      program: programKey,
+      area: "Internal",
+      action: "Updated Internal",
+      details: `Internal labor updated (${internalLaborItems?.length ?? 0} row(s))`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [internalLaborItems]);
+
+  useEffect(() => {
+    if (!didInitRef.current.tns) {
+      didInitRef.current.tns = true;
+      return;
+    }
+    queueAutoLog({
+      program: programKey,
+      area: "Tools & Services",
+      action: "Updated Tools & Services",
+      details: `T&S updated (${tnsItems?.length ?? 0} item(s))`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tnsItems]);
+
+  useEffect(() => {
+    if (!didInitRef.current.contractors) {
+      didInitRef.current.contractors = true;
+      return;
+    }
+    queueAutoLog({
+      program: programKey,
+      area: "Contractors",
+      action: "Updated Contractors",
+      details: `Contractors updated (${contractors?.length ?? 0} item(s))`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractors]);
+
+  useEffect(() => {
+    if (!didInitRef.current.sows) {
+      didInitRef.current.sows = true;
+      return;
+    }
+    queueAutoLog({
+      program: programKey,
+      area: "SOW",
+      action: "Updated SOW",
+      details: `SOW updated (${sows?.length ?? 0} item(s))`,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sows]);
+
+  // T&S change log (program-specific)
   const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(tnsChangelogKey, []);
 
   // Rollups
@@ -166,7 +243,17 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       program: programKey,
       ...payload,
     };
+
+    // existing manual-style log
     setExternalChangeLog((prev) => [entry, ...prev].slice(0, 300));
+
+    // ✅ NEW: auto log entry
+    addAutoLogEntry({
+      program: programKey,
+      area: payload?.area || "External",
+      action: payload?.action || "Updated External",
+      details: payload?.details || payload?.message || "",
+    });
   }
 
   function logTns(payload) {
@@ -177,7 +264,17 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       program: programKey,
       ...payload,
     };
+
+    // existing manual-style log
     setTnsChangeLog((prev) => [entry, ...prev].slice(0, 300));
+
+    // ✅ NEW: auto log entry
+    addAutoLogEntry({
+      program: programKey,
+      area: "Tools & Services",
+      action: payload?.action || "Updated Tools & Services",
+      details: payload?.details || payload?.message || "",
+    });
   }
 
   // --- Styling maps (subtle, consistent) ---
@@ -280,12 +377,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       </div>
 
       {/* Full-width content panel (left-aligned, more real estate) */}
-      <div
-        className={[
-          "rounded-3xl border p-5 shadow-sm",
-          activeMeta.panel,
-        ].join(" ")}
-      >
+      <div className={["rounded-3xl border p-5 shadow-sm", activeMeta.panel].join(" ")}>
         {/* Section header */}
         <div className="mb-4">
           <div className={["text-lg font-extrabold", activeMeta.header].join(" ")}>
@@ -337,11 +429,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </div>
 
             <div className="mt-5">
-              <InternalLabor
-                mode={internalTab}
-                items={internalLaborItems}
-                setItems={setInternalLaborItems}
-              />
+              <InternalLabor mode={internalTab} items={internalLaborItems} setItems={setInternalLaborItems} />
             </div>
           </div>
         ) : null}
@@ -407,12 +495,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   <MonthTable title="Tools & Services" rows={tnsMonthlyRows} showMonthFilter />
                 </ScrollFrame>
               ) : (
-                <ToolsServicesDetails
-                  programKey={programKey}
-                  items={tnsItems}
-                  setItems={setTnsItems}
-                  onLog={logTns}
-                />
+                <ToolsServicesDetails programKey={programKey} items={tnsItems} setItems={setTnsItems} onLog={logTns} />
               )}
             </div>
           </div>
@@ -487,12 +570,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                     onLog={logExternal}
                   />
 
-                  <ExternalSowDetails
-                    programKey={programKey}
-                    sows={sows}
-                    setSows={setSows}
-                    onLog={logExternal}
-                  />
+                  <ExternalSowDetails programKey={programKey} sows={sows} setSows={setSows} onLog={logExternal} />
                 </div>
               )}
             </div>
