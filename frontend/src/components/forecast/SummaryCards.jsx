@@ -78,7 +78,6 @@ function formatBeforeAfter(before, after) {
 function payloadToAutoDetails(payload) {
   if (!payload) return "";
 
-  // Prefer explicit strings if present
   if (payload.details) return String(payload.details);
   if (payload.message) return String(payload.message);
 
@@ -108,10 +107,14 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   // Global keys
   const actorKey = `pfc.actor`;
 
-  // UI keys (tabs are kept persisted)
-  const internalTabKey = `pfc.${programKey}.ui.internalTab`; // total|details (kept, but we show both now)
-  const externalTabKey = `pfc.${programKey}.ui.externalTab`; // total|details (kept, but we show both now)
-  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`; // total|details (kept, but we show both now)
+  // ✅ Active section is GLOBAL and should follow you across programs
+  // Default only on first load is "internal"
+  const activeSectionKey = `pfc.ui.activeSection`; // internal|tools|external
+
+  // UI keys (tabs are per-program; kept for state compatibility)
+  const internalTabKey = `pfc.${programKey}.ui.internalTab`;
+  const externalTabKey = `pfc.${programKey}.ui.externalTab`;
+  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`;
 
   // Internal keys
   const internalItemsKey = `pfc.${programKey}.internal.labor.items`;
@@ -125,38 +128,18 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const tnsItemsKey = `pfc.${programKey}.tns.items`;
   const tnsChangelogKey = `pfc.${programKey}.tns.changelog`;
 
-  // Actor (kept for manual-style log entries; ChangeLogPage has its own manual author input)
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
-  // ✅ Active section is UI-only and must ALWAYS default to internal per program switch
-  const [activeSection, setActiveSection] = useState("internal");
+  // ✅ global active section
+  const [activeSection, setActiveSection] = useLocalStorageState(
+    activeSectionKey,
+    "internal"
+  );
 
-  // Tabs (we keep these so you don't lose stored UI state, but we won't hide content anymore)
+  // Tabs (kept; content shows both)
   const [, setInternalTab] = useLocalStorageState(internalTabKey, "total");
   const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
   const [, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
-
-  // ✅ On every program change: always open Internal (no remembering Tools/External per program)
-  useEffect(() => {
-    setActiveSection("internal");
-
-    // optional: keep these if you want consistent starting tab state too
-    setInternalTab("total");
-    setTnsTab("total");
-    setExternalTab("total");
-
-    // optional: cleanup legacy stored activeSection values so old behavior doesn’t “feel” sticky
-    try {
-      localStorage.removeItem(`pfc.connected.ui.activeSection`);
-      localStorage.removeItem(`pfc.tre.ui.activeSection`);
-      localStorage.removeItem(`pfc.csc.ui.activeSection`);
-      localStorage.removeItem(`pfc.${programKey}.ui.activeSection`);
-      localStorage.removeItem(`pfc.ui.activeSection`);
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [programKey]);
 
   // Internal state
   const [internalLaborItems, setInternalLaborItems] = useLocalStorageState(
@@ -213,13 +196,12 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   }, [tnsRollup]);
 
   /* =========================================================
-     Logging (FIXED)
+     Logging
      ========================================================= */
 
   function writeAutoLog(payload, fallbackArea) {
     if (!payload) return;
 
-    // ✅ No "kind" gating. Components already call onLog only for real edits.
     const area =
       payload.area ||
       fallbackArea ||
@@ -245,12 +227,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     });
   }
 
-  // Internal edit logger
   function logInternal(payload) {
     writeAutoLog(payload, "Internal");
   }
 
-  // External edit logger
   function logExternal(payload) {
     const entry = {
       id: crypto.randomUUID(),
@@ -260,14 +240,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       ...payload,
     };
 
-    // existing manual-style log (keep)
     setExternalChangeLog((prev) => [entry, ...(prev || [])].slice(0, 300));
-
-    // ✅ auto log (fixed)
     writeAutoLog(payload, "External");
   }
 
-  // T&S edit logger
   function logTns(payload) {
     const entry = {
       id: crypto.randomUUID(),
@@ -277,14 +253,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       ...payload,
     };
 
-    // existing manual-style log (keep)
     setTnsChangeLog((prev) => [entry, ...(prev || [])].slice(0, 300));
-
-    // ✅ auto log (fixed)
     writeAutoLog(payload, "Tools & Services");
   }
 
-  // --- Styling maps (kept as-is from your branch) ---
+  // --- Styling maps ---
   const sectionMeta = {
     internal: {
       title: "Internal",
@@ -349,9 +322,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     <div className="w-full">
       {/* Header */}
       <div className="px-6 pt-6">
-        {/* ✅ Removed duplicate title "Forecast Companion" */}
-
-        {/* ✅ Program bigger + pills moved to top-right */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <div className="text-xl font-extrabold text-gray-900">Program</div>
@@ -368,7 +338,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </select>
           </div>
 
-          {/* Top pills (top-right) */}
           <div className="flex flex-wrap gap-3 lg:justify-end">
             <TopPill id="internal" />
             <TopPill id="tools" />
@@ -379,16 +348,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
       {/* Active section container */}
       <div className="px-6 pb-10">
-        <div
-          className={["mt-6 rounded-3xl border p-6", activeMeta.panel].join(" ")}
-        >
+        <div className={["mt-6 rounded-3xl border p-6", activeMeta.panel].join(" ")}>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div
-                className={["text-xl font-extrabold", activeMeta.header].join(
-                  " "
-                )}
-              >
+              <div className={["text-xl font-extrabold", activeMeta.header].join(" ")}>
                 {activeMeta.title}
               </div>
               <div className="mt-1 text-sm font-semibold text-gray-600">
@@ -397,12 +360,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </div>
           </div>
 
-          {/* =========================================================
-              INTERNAL
-             ========================================================= */}
+          {/* INTERNAL */}
           {activeSection === "internal" ? (
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              {/* Buttons kept (but content below always shows both now) */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -424,11 +384,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (
-                      confirm(
-                        `Clear saved Internal labor items for ${programKey}?`
-                      )
-                    ) {
+                    if (confirm(`Clear saved Internal labor items for ${programKey}?`)) {
                       setInternalLaborItems([]);
                     }
                   }}
@@ -438,7 +394,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 </button>
               </div>
 
-              {/* ✅ Show BOTH: Total first, Details below */}
               <div className="mt-5">
                 <InternalLabor
                   mode="total"
@@ -459,12 +414,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </div>
           ) : null}
 
-          {/* =========================================================
-              TOOLS & SERVICES
-             ========================================================= */}
+          {/* TOOLS & SERVICES */}
           {activeSection === "tools" ? (
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              {/* Buttons kept (but content below always shows both now) */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -486,11 +438,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (
-                      confirm(
-                        `Clear saved Tools & Services for ${programKey}?`
-                      )
-                    ) {
+                    if (confirm(`Clear saved Tools & Services for ${programKey}?`)) {
                       setTnsItems([]);
                     }
                   }}
@@ -499,22 +447,16 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   Reset T&amp;S
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Clear T&S change log for ${programKey}?`)) {
-                      setTnsChangeLog([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset T&amp;S Log
-                </button>
+                {/* ✅ Removed Reset T&S Log button */}
               </div>
 
-              {/* ✅ Show BOTH: Total first, Details below */}
+              {/* ✅ Month filter restored for Tools & Services */}
               <div className="mt-5">
-                <MonthTable title="Tools & Services" rows={tnsMonthlyRows} />
+                <MonthTable
+                  title="Tools & Services"
+                  rows={tnsMonthlyRows}
+                  showMonthFilter={true}
+                />
               </div>
 
               <div className="mt-6 border-t pt-6">
@@ -528,12 +470,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
             </div>
           ) : null}
 
-          {/* =========================================================
-              EXTERNAL
-             ========================================================= */}
+          {/* EXTERNAL */}
           {activeSection === "external" ? (
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              {/* Buttons kept (but content below always shows both now) */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -577,7 +516,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 </button>
               </div>
 
-              {/* ✅ Show BOTH: Total first (with month range slider), Details below */}
               <div className="mt-5">
                 <MonthTable
                   title="External"
