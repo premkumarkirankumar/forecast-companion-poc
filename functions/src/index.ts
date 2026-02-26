@@ -7,7 +7,7 @@ type AssistantBody = {
   programId?: string;
   question?: string;
   stream?: boolean;
-  mode?: "listModels";
+  mode?: "listModels" | "debugState" | "debugEnv";
 };
 
 type ModelsResponse = {
@@ -32,16 +32,6 @@ function ensureAdmin(): void {
 }
 
 /**
- * Safely converts unknown to a finite number (defaults to 0).
- * @param {unknown} v - input value
- * @return {number} finite number or 0
- */
-function num(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/**
  * Ensures a value is an array; otherwise returns an empty array.
  * @param {unknown} v - input value
  * @return {unknown[]} array value or []
@@ -60,53 +50,7 @@ function countItems(v: unknown): number {
 }
 
 /**
- * Sums yearTarget fields for an array of items.
- * @param {unknown[]} items - list of items
- * @return {number} sum of yearTarget
- */
-function sumYearTargets(items: unknown[]): number {
-  let total = 0;
-  for (const it of items) {
-    if (it && typeof it === "object") {
-      const obj = it as Record<string, unknown>;
-      total += num(obj.yearTarget);
-    }
-  }
-  return total;
-}
-
-/**
- * Builds a compact state summary for grounding the AI prompt.
- * This is additive-only context and does not affect existing API shape.
- * @param {Record<string, unknown> | null} state - program state from Firestore
- * @return {string[]} summary lines
- */
-function buildStateSummary(state: Record<string, unknown> | null): string[] {
-  if (!state) return [];
-
-  const internalLaborItems = asArray(state.internalLaborItems);
-  const contractors = asArray(state.contractors);
-  const sows = asArray(state.sows);
-  const tnsItems = asArray(state.tnsItems);
-
-  const lines: string[] = [];
-
-  lines.push("Data context (from Firestore programs/{programId}.state):");
-  lines.push(`- Internal labor items: ${countItems(internalLaborItems)}`);
-  lines.push(`- External contractors: ${countItems(contractors)}`);
-  lines.push(`- External SOWs: ${countItems(sows)}`);
-  lines.push(`- Tools & Services items: ${countItems(tnsItems)}`);
-
-  const tnsTarget = sumYearTargets(tnsItems);
-  if (tnsTarget > 0) {
-    lines.push(`- Tools & Services yearTarget (sum): ${tnsTarget}`);
-  }
-
-  return lines;
-}
-
-/**
- * Loads program state from Firestore doc: programs/{programId}.
+ * Safely loads program state from Firestore doc: programs/{programId}.
  * If not found or if any error occurs, returns null (non-breaking).
  * @param {string} programId - connected | tre | csc | default
  * @return {Promise<Record<string, unknown> | null>} program state
@@ -122,6 +66,7 @@ async function loadProgramState(
 
     const data = snap.data() as ProgramDoc | undefined;
     const state = (data?.state ?? null) as Record<string, unknown> | null;
+
     return state;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -179,6 +124,61 @@ export const assistant = onRequest(
       return;
     }
 
+    if (mode === "debugEnv") {
+      res.status(200).json({
+        ok: true,
+        runtime: {
+          gcloudProject: process.env.GCLOUD_PROJECT,
+          googleCloudProject: process.env.GOOGLE_CLOUD_PROJECT,
+          functionsEmulator: process.env.FUNCTIONS_EMULATOR,
+        },
+      });
+      return;
+    }
+
+    if (mode === "debugState") {
+      try {
+        ensureAdmin();
+
+        const refPath = `programs/${programId}`;
+        const snap = await admin.firestore().doc(refPath).get();
+
+        const data = snap.exists ? (snap.data() as ProgramDoc) : undefined;
+        const state = (data?.state ?? null) as Record<string, unknown> | null;
+
+        const keys = state ? Object.keys(state) : [];
+
+        const tnsItemsArr = asArray(state?.tnsItems);
+        const contractorsArr = asArray(state?.contractors);
+        const sowsArr = asArray(state?.sows);
+        const internalLaborArr = asArray(state?.internalLaborItems);
+
+        res.status(200).json({
+          ok: true,
+          programId,
+          refPath,
+          exists: snap.exists,
+          hasState: Boolean(state),
+          stateKeys: keys,
+          counts: {
+            tnsItems: tnsItemsArr.length,
+            contractors: contractorsArr.length,
+            sows: sowsArr.length,
+            internalLaborItems: internalLaborArr.length,
+          },
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        res.status(200).json({
+          ok: true,
+          programId,
+          exists: false,
+          debugError: message,
+        });
+      }
+      return;
+    }
+
     if (!question) {
       res.status(400).json({error: "Missing 'question' in request body."});
       return;
@@ -188,7 +188,7 @@ export const assistant = onRequest(
     const model = genAI.getGenerativeModel({model: "gemini-2.5-flash"});
 
     const state = await loadProgramState(programId);
-    const stateSummary = buildStateSummary(state);
+    const keys = state ? Object.keys(state) : [];
 
     const promptLines: string[] = [
       "You are Forecast Companion Analyst.",
@@ -197,9 +197,22 @@ export const assistant = onRequest(
       "If data is not provided, say what you need.",
     ];
 
-    if (stateSummary.length > 0) {
+    if (state) {
+      const countsLine =
+        "Counts: " +
+        `tnsItems=${countItems(asArray(state.tnsItems))}, ` +
+        `contractors=${countItems(asArray(state.contractors))}, ` +
+        `sows=${countItems(asArray(state.sows))}, ` +
+        "internalLaborItems=" +
+        `${countItems(asArray(state.internalLaborItems))}`;
+
       promptLines.push("");
-      promptLines.push(...stateSummary);
+      promptLines.push("Firestore state loaded: YES");
+      promptLines.push(`State keys: ${keys.join(", ")}`);
+      promptLines.push(countsLine);
+    } else {
+      promptLines.push("");
+      promptLines.push("Firestore state loaded: NO");
     }
 
     promptLines.push("");
