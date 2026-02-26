@@ -11,8 +11,11 @@ import ToolsServicesDetails from "./ToolsServicesDetails";
 
 import { addAutoLogEntry } from "./autoLogStore";
 
+// ✅ Firestore helpers (shared program docs)
+import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
+
 /* =========================================================
-   LocalStorage hook
+   LocalStorage hook (UI-only preferences)
    ========================================================= */
 function useLocalStorageState(key, initialValue) {
   const [state, setState] = useState(() => {
@@ -24,7 +27,7 @@ function useLocalStorageState(key, initialValue) {
     }
   });
 
-  // re-hydrate when key changes (program switch)
+  // re-hydrate when key changes
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -38,7 +41,6 @@ function useLocalStorageState(key, initialValue) {
   useEffect(() => {
     try {
       localStorage.setItem(key, JSON.stringify(state));
-      window.dispatchEvent(new CustomEvent("pfc:storage", { detail: { key } }));
     } catch {
       // ignore
     }
@@ -116,18 +118,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const externalTabKey = `pfc.${programKey}.ui.externalTab`;
   const tnsTabKey = `pfc.${programKey}.ui.tnsTab`;
 
-  // Internal keys
-  const internalItemsKey = `pfc.${programKey}.internal.labor.items`;
-
-  // External keys
-  const contractorsKey = `pfc.${programKey}.external.contractors`;
-  const sowKey = `pfc.${programKey}.external.sow`;
-  const externalChangelogKey = `pfc.${programKey}.external.changelog`;
-
-  // T&S keys
-  const tnsItemsKey = `pfc.${programKey}.tns.items`;
-  const tnsChangelogKey = `pfc.${programKey}.tns.changelog`;
-
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
   // ✅ global active section
@@ -136,31 +126,125 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     "internal"
   );
 
-  // Tabs (kept; content shows both)
+  // Tabs (UI-only; content shows both)
   const [, setInternalTab] = useLocalStorageState(internalTabKey, "total");
   const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
   const [, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
+  /* =========================================================
+     PROGRAM DATA STATE (Firestore-backed)
+     ========================================================= */
+
   // Internal state
-  const [internalLaborItems, setInternalLaborItems] = useLocalStorageState(
-    internalItemsKey,
-    []
-  );
+  const [internalLaborItems, setInternalLaborItems] = useState([]);
 
   // External state
-  const [contractors, setContractors] = useLocalStorageState(contractorsKey, []);
-  const [sows, setSows] = useLocalStorageState(sowKey, []);
-  const [externalChangeLog, setExternalChangeLog] = useLocalStorageState(
-    externalChangelogKey,
-    []
-  );
+  const [contractors, setContractors] = useState([]);
+  const [sows, setSows] = useState([]);
+  const [externalChangeLog, setExternalChangeLog] = useState([]);
 
   // T&S state
-  const [tnsItems, setTnsItems] = useLocalStorageState(tnsItemsKey, []);
-  const [tnsChangeLog, setTnsChangeLog] = useLocalStorageState(
-    tnsChangelogKey,
-    []
-  );
+  const [tnsItems, setTnsItems] = useState([]);
+  const [tnsChangeLog, setTnsChangeLog] = useState([]);
+
+  // Hydration guard (don’t auto-save while loading remote state)
+  const [isHydrating, setIsHydrating] = useState(false);
+
+  // ✅ Step 6B: Load program data from Firestore when program changes
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      try {
+        setIsHydrating(true);
+
+        const remoteState = await loadProgramState(programKey);
+
+        if (cancelled) return;
+
+        // If nothing exists yet, keep defaults (empty arrays)
+        if (!remoteState) {
+          setInternalLaborItems([]);
+          setContractors([]);
+          setSows([]);
+          setExternalChangeLog([]);
+          setTnsItems([]);
+          setTnsChangeLog([]);
+          return;
+        }
+
+        // Apply remote state safely (guard types)
+        setInternalLaborItems(
+          Array.isArray(remoteState.internalLaborItems)
+            ? remoteState.internalLaborItems
+            : []
+        );
+
+        setContractors(
+          Array.isArray(remoteState.contractors) ? remoteState.contractors : []
+        );
+
+        setSows(Array.isArray(remoteState.sows) ? remoteState.sows : []);
+
+        setExternalChangeLog(
+          Array.isArray(remoteState.externalChangeLog)
+            ? remoteState.externalChangeLog
+            : []
+        );
+
+        setTnsItems(
+          Array.isArray(remoteState.tnsItems) ? remoteState.tnsItems : []
+        );
+
+        setTnsChangeLog(
+          Array.isArray(remoteState.tnsChangeLog)
+            ? remoteState.tnsChangeLog
+            : []
+        );
+      } catch (e) {
+        console.error("Failed to load Firestore program state:", e);
+        // Keep app usable even if Firestore fails
+      } finally {
+        if (!cancelled) setIsHydrating(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [programKey]);
+
+  // ✅ Step 6C: Save program data to Firestore when data changes (debounced)
+  useEffect(() => {
+    if (isHydrating) return;
+
+    const t = setTimeout(() => {
+      const stateToSave = {
+        internalLaborItems,
+        contractors,
+        sows,
+        externalChangeLog,
+        tnsItems,
+        tnsChangeLog,
+      };
+
+      saveProgramState(programKey, stateToSave).catch((e) => {
+        console.error("Failed to save Firestore program state:", e);
+      });
+    }, 900); // debounce (500–1000ms is good)
+
+    return () => clearTimeout(t);
+  }, [
+    programKey,
+    internalLaborItems,
+    contractors,
+    sows,
+    externalChangeLog,
+    tnsItems,
+    tnsChangeLog,
+    isHydrating,
+  ]);
 
   // Rollups
   const contractorsRollup = useMemo(

@@ -5,6 +5,10 @@ import SummaryCards from "./components/forecast/SummaryCards";
 import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
 import TrendsPage from "./components/forecast/TrendsPage";
+import AuthBar from "./components/AuthBar";
+
+// ✅ Firestore helpers (Step 6B + 6C)
+import { loadProgramState, saveProgramState } from "./data/firestorePrograms";
 
 // simple seed for T&S (only used if you want to render ToolsServicesDetails directly)
 const seedTns = [
@@ -66,6 +70,54 @@ export default function App() {
   const [tnsItems, setTnsItems] = useState(seedTns);
   const showToolsServicesOnly = useMemo(() => false, []);
 
+  // ✅ Hydration flag so we don't auto-save while loading remote state
+  const [isHydrating, setIsHydrating] = useState(false);
+
+  // ✅ Step 6B: Load from Firestore when program changes (shared doc per program)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      try {
+        setIsHydrating(true);
+
+        const remoteState = await loadProgramState(selectedProgram);
+
+        if (cancelled) return;
+
+        // Only apply what App.jsx owns today.
+        // (Later you can expand this to include internal/external state too.)
+        if (remoteState && Array.isArray(remoteState.tnsItems)) {
+          setTnsItems(remoteState.tnsItems);
+        }
+      } catch (e) {
+        // Keep app usable even if Firestore fails
+        console.error("Failed to load Firestore state:", e);
+      } finally {
+        if (!cancelled) setIsHydrating(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProgram]);
+
+  // ✅ Step 6C: Save to Firestore when state changes (debounced)
+  useEffect(() => {
+    if (isHydrating) return;
+
+    const t = setTimeout(() => {
+      // Save shared program doc: programs/{connected|tre|csc}
+      saveProgramState(selectedProgram, { tnsItems }).catch((e) => {
+        console.error("Failed to save Firestore state:", e);
+      });
+    }, 800);
+
+    return () => clearTimeout(t);
+  }, [selectedProgram, tnsItems, isHydrating]);
+
   if (page === "changelog") {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -114,6 +166,7 @@ export default function App() {
             >
               Change Log
             </button>
+            <AuthBar />
           </div>
         </div>
       </div>
@@ -126,7 +179,11 @@ export default function App() {
             onProgramChange={setSelectedProgram}
           />
         ) : (
-          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />
+          <ToolsServicesDetails
+            items={tnsItems}
+            setItems={setTnsItems}
+            onLog={() => { }}
+          />
         )}
       </div>
     </div>
