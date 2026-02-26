@@ -103,8 +103,9 @@ export const assistant = onRequest(
 
     if (mode === "listModels") {
       try {
-        const url =
-          "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey;
+        const baseUrl =
+          "https://generativelanguage.googleapis.com/v1beta/models?key=";
+        const url = baseUrl + apiKey;
 
         const r = await fetch(url);
         const j = (await r.json()) as ModelsResponse;
@@ -185,7 +186,9 @@ export const assistant = onRequest(
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({model: "gemini-2.5-flash"});
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+    });
 
     const state = await loadProgramState(programId);
     const keys = state ? Object.keys(state) : [];
@@ -195,6 +198,16 @@ export const assistant = onRequest(
       `Program: ${programId}`,
       "Rules: Do not invent numbers.",
       "If data is not provided, say what you need.",
+      "Formatting: Respond in plain text paragraphs only.",
+      "No Markdown, no bullets, no asterisks.",
+      "If listing items is needed, use sentences separated by new lines.",
+      "Do not use leading '*', '-', or numbering.",
+      "Formatting rules:",
+      "1. Respond in clean business paragraphs.",
+      "2. Do NOT use Markdown.",
+      "3. Do NOT use *, -, or numbered lists.",
+      "4. Use short executive-style explanations.",
+      "Tone: Professional, concise, executive summary style.",
     ];
 
     if (state) {
@@ -210,6 +223,11 @@ export const assistant = onRequest(
       promptLines.push("Firestore state loaded: YES");
       promptLines.push(`State keys: ${keys.join(", ")}`);
       promptLines.push(countsLine);
+
+      const stateJson = JSON.stringify(state);
+      promptLines.push("");
+      promptLines.push("STATE_JSON:");
+      promptLines.push(stateJson);
     } else {
       promptLines.push("");
       promptLines.push("Firestore state loaded: NO");

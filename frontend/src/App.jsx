@@ -172,7 +172,7 @@ export default function App() {
             >
               Change Log
             </button>
-
+            <AssistantDrawer programId={selectedProgram} />
             <AuthBar />
           </div>
         </div>
