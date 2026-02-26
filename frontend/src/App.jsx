@@ -8,10 +8,9 @@ import TrendsPage from "./components/forecast/TrendsPage";
 import AuthBar from "./components/AuthBar";
 import AssistantDrawer from "./components/ai/AssistantDrawer";
 
-// ✅ Firestore helpers (Step 6B + 6C)
+// ✅ Firestore helpers
 import { loadProgramState, saveProgramState } from "./data/firestorePrograms";
 
-// simple seed for T&S (only used if you want to render ToolsServicesDetails directly)
 const seedTns = [
   {
     id: "tns-1",
@@ -50,6 +49,7 @@ const seedTns = [
 
 export default function App() {
   const [page, setPage] = useState("dashboard"); // dashboard | changelog | trends
+
   const [selectedProgram, setSelectedProgram] = useState(() => {
     try {
       const raw = localStorage.getItem("pfc.ui.program");
@@ -71,10 +71,12 @@ export default function App() {
   const [tnsItems, setTnsItems] = useState(seedTns);
   const showToolsServicesOnly = useMemo(() => false, []);
 
-  // ✅ Hydration flag so we don't auto-save while loading remote state
   const [isHydrating, setIsHydrating] = useState(false);
 
-  // ✅ Step 6B: Load from Firestore when program changes (shared doc per program)
+  // ✅ AI Drawer state
+  const [aiOpen, setAiOpen] = useState(false);
+
+  // ✅ Load Firestore on program change
   useEffect(() => {
     let cancelled = false;
 
@@ -86,13 +88,10 @@ export default function App() {
 
         if (cancelled) return;
 
-        // Only apply what App.jsx owns today.
-        // (Later you can expand this to include internal/external state too.)
         if (remoteState && Array.isArray(remoteState.tnsItems)) {
           setTnsItems(remoteState.tnsItems);
         }
       } catch (e) {
-        // Keep app usable even if Firestore fails
         console.error("Failed to load Firestore state:", e);
       } finally {
         if (!cancelled) setIsHydrating(false);
@@ -105,12 +104,11 @@ export default function App() {
     };
   }, [selectedProgram]);
 
-  // ✅ Step 6C: Save to Firestore when state changes (debounced)
+  // ✅ Save Firestore (debounced)
   useEffect(() => {
     if (isHydrating) return;
 
     const t = setTimeout(() => {
-      // Save shared program doc: programs/{connected|tre|csc}
       saveProgramState(selectedProgram, { tnsItems }).catch((e) => {
         console.error("Failed to save Firestore state:", e);
       });
@@ -122,7 +120,6 @@ export default function App() {
   if (page === "changelog") {
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* No mx-auto, minimal padding so it aligns left */}
         <div className="w-full px-3 py-4">
           <ChangelogPage onBack={() => setPage("dashboard")} />
         </div>
@@ -141,7 +138,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top Bar (full width, left aligned) */}
+      {/* Top Bar */}
       <div className="border-b border-gray-200 bg-white">
         <div className="flex w-full items-center justify-between px-3 py-4">
           <div>
@@ -154,6 +151,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* ✅ AI button (matches Tailwind style) */}
+            <button
+              onClick={() => setAiOpen(true)}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+            >
+              May I Ask AI?
+            </button>
+
             <button
               onClick={() => setPage("trends")}
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
@@ -167,14 +172,13 @@ export default function App() {
             >
               Change Log
             </button>
-            {/* ✅ Gemini Assistant */}
-            <AssistantDrawer programId={selectedProgram} />
+
             <AuthBar />
           </div>
         </div>
       </div>
 
-      {/* Main Content (full width, left aligned) */}
+      {/* Main Content */}
       <div className="w-full px-3 py-5">
         {!showToolsServicesOnly ? (
           <SummaryCards
@@ -182,13 +186,16 @@ export default function App() {
             onProgramChange={setSelectedProgram}
           />
         ) : (
-          <ToolsServicesDetails
-            items={tnsItems}
-            setItems={setTnsItems}
-            onLog={() => { }}
-          />
+          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />
         )}
       </div>
+
+      {/* ✅ Assistant Drawer */}
+      <AssistantDrawer
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        programId={selectedProgram}
+      />
     </div>
   );
 }
