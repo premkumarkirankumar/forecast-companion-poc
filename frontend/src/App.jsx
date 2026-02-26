@@ -6,6 +6,7 @@ import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
 import TrendsPage from "./components/forecast/TrendsPage";
 import AuthBar from "./components/AuthBar";
+import AssistantDrawer from "./components/ai/AssistantDrawer";
 
 // ✅ Firestore helpers (Step 6B + 6C)
 import { loadProgramState, saveProgramState } from "./data/firestorePrograms";
@@ -166,6 +167,8 @@ export default function App() {
             >
               Change Log
             </button>
+            {/* ✅ Gemini Assistant */}
+            <AssistantDrawer programId={selectedProgram} />
             <AuthBar />
           </div>
         </div>
