@@ -619,7 +619,14 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     <div className="w-full">
       {/* Header */}
       <div className="px-6 pt-6">
+        {/* ✅ UI-only restructure (minimum change):
+            - Program stays left
+            - Excel buttons removed from this page (moved to Data Management page later)
+            - Pills stay right
+            - NO logic changes
+        */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          {/* Left: Program */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="text-xl font-extrabold text-gray-900">Program</div>
             <select
@@ -633,44 +640,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 </option>
               ))}
             </select>
-
-            {/* ✅ Step 3: Import button */}
-            <button
-              type="button"
-              onClick={() => setImportOpen(true)}
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-extrabold text-gray-900 shadow-sm hover:bg-gray-50"
-              title="Import Connected / TRE / CSC sheets from Excel"
-            >
-              Import Excel
-            </button>
-
-            {/* ✅ Step 6: Download Template button */}
-            <button
-              type="button"
-              onClick={() => downloadForecastTemplate({ includeSampleRow: true })}
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-extrabold text-gray-900 shadow-sm hover:bg-gray-50"
-              title="Download an Excel template with correct sheets and headers"
-            >
-              Download Template
-            </button>
-
-            {/* ✅ Step 7: Export Excel button (NEW) */}
-            <button
-              type="button"
-              onClick={async () => {
-                const all = {};
-                for (const pk of ["connected", "tre", "csc"]) {
-                  all[pk] = (await loadProgramState(pk)) || {};
-                }
-                exportForecastWorkbook(all, { fileName: "forecast-export.xlsx" });
-              }}
-              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-extrabold text-gray-900 shadow-sm hover:bg-gray-50"
-              title="Export current data (Connected / TRE / CSC) to Excel"
-            >
-              Export Excel
-            </button>
           </div>
 
+          {/* Right: section pills */}
           <div className="flex flex-wrap gap-3 lg:justify-end">
             <TopPill id="internal" />
             <TopPill id="tools" />
@@ -721,7 +693,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm(`Clear saved Internal labor items for ${programKey}?`)) {
+                    if (
+                      confirm(
+                        `Clear saved Internal labor items for ${programKey}?`
+                      )
+                    ) {
                       setInternalLaborItems([]);
                     }
                   }}
@@ -775,7 +751,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm(`Clear saved Tools & Services for ${programKey}?`)) {
+                    if (
+                      confirm(`Clear saved Tools & Services for ${programKey}?`)
+                    ) {
                       setTnsItems([]);
                     }
                   }}

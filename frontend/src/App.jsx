@@ -5,6 +5,7 @@ import SummaryCards from "./components/forecast/SummaryCards";
 import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
 import TrendsPage from "./components/forecast/TrendsPage";
+import DataManagementPage from "./components/forecast/DataManagementPage";
 import AuthBar from "./components/AuthBar";
 import AssistantDrawer from "./components/ai/AssistantDrawer";
 
@@ -48,7 +49,7 @@ const seedTns = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState("dashboard"); // dashboard | changelog | trends
+  const [page, setPage] = useState("dashboard"); // dashboard | changelog | trends | data
 
   const [selectedProgram, setSelectedProgram] = useState(() => {
     try {
@@ -136,6 +137,17 @@ export default function App() {
     );
   }
 
+  // ✅ Data Management page (UI-only navigation)
+  if (page === "data") {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="w-full px-3 py-4">
+          <DataManagementPage onBack={() => setPage("dashboard")} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar */}
@@ -151,6 +163,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* ✅ NEW: Data Management button (before AI Advisor) */}
+            <button
+              onClick={() => setPage("data")}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+            >
+              Data Management
+            </button>
+
             {/* ✅ AI button (matches Tailwind style) */}
             <button
               onClick={() => setAiOpen(true)}
@@ -172,6 +192,7 @@ export default function App() {
             >
               Change Log
             </button>
+
             <AssistantDrawer programId={selectedProgram} />
             <AuthBar />
           </div>
@@ -186,7 +207,11 @@ export default function App() {
             onProgramChange={setSelectedProgram}
           />
         ) : (
-          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />
+          <ToolsServicesDetails
+            items={tnsItems}
+            setItems={setTnsItems}
+            onLog={() => {}}
+          />
         )}
       </div>
 
