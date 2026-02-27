@@ -60,6 +60,16 @@ function normalizeSplit(msPct, nfPct) {
   return { msPct: msN, nfPct: 100 - msN };
 }
 
+function splitFromMs(msPct) {
+  const ms = clampPct(msPct);
+  return { msPct: ms, nfPct: 100 - ms };
+}
+
+function splitFromNf(nfPct) {
+  const nf = clampPct(nfPct);
+  return { msPct: 100 - nf, nfPct: nf };
+}
+
 function num(v) {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
@@ -645,12 +655,12 @@ export default function ExternalContractorsDetails({
                       <SmallField
                         label="MS %"
                         value={c.msPct}
-                        onChange={(v) => updateSplit(c.id, v, c.nfPct)}
+                        onChange={(v) => updateSplit(c.id, splitFromMs(v).msPct, splitFromMs(v).nfPct)}
                       />
                       <SmallField
                         label="NF %"
                         value={c.nfPct}
-                        onChange={(v) => updateSplit(c.id, c.msPct, v)}
+                        onChange={(v) => updateSplit(c.id, splitFromNf(v).msPct, splitFromNf(v).nfPct)}
                       />
 
                       <div>

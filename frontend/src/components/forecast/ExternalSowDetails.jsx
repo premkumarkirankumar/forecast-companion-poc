@@ -60,6 +60,16 @@ function normalizeSplit(msPct, nfPct) {
   return { msPct: msN, nfPct: 100 - msN };
 }
 
+function splitFromMs(msPct) {
+  const ms = clampPct(msPct);
+  return { msPct: ms, nfPct: 100 - ms };
+}
+
+function splitFromNf(nfPct) {
+  const nf = clampPct(nfPct);
+  return { msPct: 100 - nf, nfPct: nf };
+}
+
 function num(v) {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
@@ -530,9 +540,10 @@ export default function ExternalSowDetails({
                           type="number"
                           className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
                           value={s.msPct}
-                          onChange={(e) =>
-                            updateSplit(s.id, e.target.value, s.nfPct)
-                          }
+                          onChange={(e) => {
+                             const sp = splitFromMs(e.target.value);
+                             updateSplit(s.id, sp.msPct, sp.nfPct);
+                          }}
                         />
                       </div>
 
@@ -544,9 +555,10 @@ export default function ExternalSowDetails({
                           type="number"
                           className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
                           value={s.nfPct}
-                          onChange={(e) =>
-                            updateSplit(s.id, s.msPct, e.target.value)
-                          }
+                          onChange={(e) => {
+                            const sp = splitFromNf(e.target.value);
+                            updateSplit(s.id, sp.msPct, sp.nfPct);
+                          }}
                         />
                       </div>
 
