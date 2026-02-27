@@ -147,19 +147,41 @@ export default function ImportExcelModal({ open, onClose, onApply }) {
               Excel file
             </label>
 
-            <div className="flex items-center gap-3">
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={(e) => handlePick(e.target.files?.[0] || null)}
-                className="block w-full text-sm"
-              />
+            {/* ✅ UI-only upgrade:
+                - Hide the native file input
+                - Provide a clear button that triggers file selection
+                - Show selected file name as a pill
+                - No parsing/apply logic changed
+            */}
+            <input
+              id="pfc-import-file"
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => handlePick(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label
+                htmlFor="pfc-import-file"
+                className="cursor-pointer rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-100"
+                title="Click to choose an .xlsx file"
+              >
+                Choose Excel file (.xlsx)
+              </label>
+
+              <div className="text-sm text-slate-600">
+                Click the button to browse your computer
+              </div>
 
               {file?.name ? (
-                <div className="truncate rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800">
-                  {file.name}
+                <div className="flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-800">
+                  <span className="text-slate-500">Selected:</span>
+                  <span className="truncate max-w-[520px]">{file.name}</span>
                 </div>
-              ) : null}
+              ) : (
+                <div className="text-sm text-slate-500">No file selected</div>
+              )}
             </div>
 
             {parsing ? (
