@@ -156,7 +156,7 @@ export default function App() {
               onClick={() => setAiOpen(true)}
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
             >
-              May I Ask AI?
+              AI Advisor
             </button>
 
             <button

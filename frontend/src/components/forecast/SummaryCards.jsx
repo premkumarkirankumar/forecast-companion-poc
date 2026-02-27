@@ -14,6 +14,15 @@ import { addAutoLogEntry } from "./autoLogStore";
 // ✅ Firestore helpers (shared program docs)
 import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
 
+// ✅ Step 3: Excel import modal
+import ImportExcelModal from "./ImportExcelModal";
+
+// ✅ Step 6: Download template helper
+import { downloadForecastTemplate } from "../../utils/excel/downloadForecastTemplate";
+
+// ✅ Step 7: Export workbook helper (NEW)
+import { exportForecastWorkbook } from "../../utils/excel/exportWorkbook";
+
 /* =========================================================
    LocalStorage hook (UI-only preferences)
    ========================================================= */
@@ -94,6 +103,44 @@ function payloadToAutoDetails(payload) {
   return out || "";
 }
 
+// ✅ Step 3 helpers (Excel → existing item shapes)
+function clampPct(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function normalizeSplit(msPct, nfPct) {
+  const ms = clampPct(msPct);
+  const nf = clampPct(nfPct);
+  const s = ms + nf;
+  if (s === 0) return { msPct: 0, nfPct: 0 };
+  const msN = Math.round((ms / s) * 100);
+  return { msPct: msN, nfPct: 100 - msN };
+}
+function distributeEvenly(total) {
+  const per = (toNum(total) || 0) / MONTHS.length;
+  return Object.fromEntries(MONTHS.map((m) => [m, per]));
+}
+function mergeByName(existing = [], incoming = []) {
+  const seen = new Set(
+    (existing || [])
+      .map((x) => String(x?.name ?? "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const toAdd = (incoming || []).filter((x) => {
+    const k = String(x?.name ?? "").trim().toLowerCase();
+    if (!k) return false;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return [...toAdd, ...(existing || [])];
+}
+
 const PROGRAM_OPTIONS = [
   { value: "connected", label: "Connected" },
   { value: "tre", label: "TRE" },
@@ -149,6 +196,170 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
   // Hydration guard (don’t auto-save while loading remote state)
   const [isHydrating, setIsHydrating] = useState(false);
+
+  // ✅ Step 3: Import modal open state
+  const [importOpen, setImportOpen] = useState(false);
+
+  // ✅ Step 3/5: Apply Excel import into program state
+  function applyExcelImport(programsPayload, opts = {}) {
+    const mode = opts?.mode || "replace"; // replace | merge
+    const targetProgramKey = opts?.programKeyOverride || programKey;
+
+    const p = programsPayload?.[targetProgramKey];
+    if (!p) return;
+
+    // ------------------------
+    // Internal
+    // ------------------------
+    const nextInternal = (p.internal || [])
+      .map((r) => ({
+        id: crypto.randomUUID(),
+        name: String(r.name ?? r["FTE Name"] ?? "").trim(),
+        runPct: clampPct(r.runPct ?? r["Run %"] ?? 0),
+        growthPct: clampPct(r.growthPct ?? r["Grow %"] ?? 0),
+      }))
+      .filter((x) => x.name);
+
+    // ------------------------
+    // Tools & Services
+    // ------------------------
+    const nextTns = (p.tns || [])
+      .map((r) => {
+        const name = String(r.name ?? r["Tool / Service Name"] ?? "").trim();
+        const yearTargetTotal = toNum(r.yearTotal ?? r["Total Per Year"] ?? 0);
+
+        // Your UI rollup expects msByMonth/nfByMonth
+        const msByMonth = distributeEvenly(yearTargetTotal);
+        const nfByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+
+        return {
+          id: crypto.randomUUID(),
+          name,
+          yearTargetTotal,
+          msPct: 100,
+          nfPct: 0,
+          msByMonth,
+          nfByMonth,
+          msLocked: {},
+          nfLocked: {},
+        };
+      })
+      .filter((x) => x.name);
+
+    // ------------------------
+    // External Contractors
+    // ------------------------
+    const nextContractors = (p.contractors || [])
+      .map((r) => {
+        const name = String(r.name ?? r["Contractor Name"] ?? "").trim();
+
+        const ratePerHour = toNum(r.ratePerHour ?? r["Rate Per Hour"] ?? 0);
+        const hoursPerWeek = toNum(r.hoursPerWeek ?? r["Hours Per Week"] ?? 0);
+        const weeksPerYear = toNum(r.weeksPerYear ?? r["Weeks Per Year"] ?? 0);
+
+        // Total per year derived from rate/hours/weeks
+        const yearTargetTotal = ratePerHour * hoursPerWeek * weeksPerYear;
+
+        const split = normalizeSplit(
+          r.msPct ?? r["MS %"] ?? 100,
+          r.nfPct ?? r["NF %"] ?? 0
+        );
+
+        const msYear = yearTargetTotal * (split.msPct / 100);
+        const nfYear = yearTargetTotal * (split.nfPct / 100);
+
+        return {
+          id: crypto.randomUUID(),
+          name,
+          ratePerHour,
+          hoursPerWeek,
+          weeksPerYear,
+          yearTargetTotal,
+          msPct: split.msPct,
+          nfPct: split.nfPct,
+          msByMonth: distributeEvenly(msYear),
+          nfByMonth: distributeEvenly(nfYear),
+          msLocked: {},
+          nfLocked: {},
+        };
+      })
+      .filter((x) => x.name);
+
+    // ------------------------
+    // External SOWs
+    // ------------------------
+    const nextSows = (p.sows || [])
+      .map((r) => {
+        const name = String(r.name ?? r["SOW Name"] ?? "").trim();
+        const yearTargetTotal = toNum(r.yearTotal ?? r["Total Per Year"] ?? 0);
+
+        const split = normalizeSplit(
+          r.msPct ?? r["MS %"] ?? 0,
+          r.nfPct ?? r["NF %"] ?? 0
+        );
+
+        const msYear = yearTargetTotal * (split.msPct / 100);
+        const nfYear = yearTargetTotal * (split.nfPct / 100);
+
+        return {
+          id: crypto.randomUUID(),
+          name,
+          yearTargetTotal,
+          msPct: split.msPct,
+          nfPct: split.nfPct,
+          msByMonth: distributeEvenly(msYear),
+          nfByMonth: distributeEvenly(nfYear),
+          msLocked: {},
+          nfLocked: {},
+        };
+      })
+      .filter((x) => x.name);
+
+    // Apply replace vs merge (per target program)
+    if (mode === "merge") {
+      if (targetProgramKey === programKey) {
+        setInternalLaborItems((prev) => mergeByName(prev, nextInternal));
+        setTnsItems((prev) => mergeByName(prev, nextTns));
+        setContractors((prev) => mergeByName(prev, nextContractors));
+        setSows((prev) => mergeByName(prev, nextSows));
+      }
+    } else {
+      if (targetProgramKey === programKey) {
+        setInternalLaborItems(nextInternal);
+        setTnsItems(nextTns);
+        setContractors(nextContractors);
+        setSows(nextSows);
+
+        // Keep existing log behavior, but on full replace it’s usually cleaner to reset logs
+        setExternalChangeLog([]);
+        setTnsChangeLog([]);
+      }
+    }
+
+    // Auto log (does not change your per-section logs)
+    addAutoLogEntry({
+      program: targetProgramKey,
+      area: "Import",
+      action: "EXCEL_IMPORT",
+      details: `Imported Excel data (${mode}) into ${targetProgramKey.toUpperCase()}`,
+      meta: {
+        internal: nextInternal.length,
+        tns: nextTns.length,
+        contractors: nextContractors.length,
+        sows: nextSows.length,
+      },
+    });
+
+    // Return state so caller can immediately save to Firestore if desired
+    return {
+      internalLaborItems: nextInternal,
+      contractors: nextContractors,
+      sows: nextSows,
+      externalChangeLog: mode === "replace" ? [] : externalChangeLog,
+      tnsItems: nextTns,
+      tnsChangeLog: mode === "replace" ? [] : tnsChangeLog,
+    };
+  }
 
   // ✅ Step 6B: Load program data from Firestore when program changes
   useEffect(() => {
@@ -420,6 +631,42 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 </option>
               ))}
             </select>
+
+            {/* ✅ Step 3: Import button */}
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-extrabold text-gray-900 shadow-sm hover:bg-gray-50"
+              title="Import Connected / TRE / CSC sheets from Excel"
+            >
+              Import Excel
+            </button>
+
+            {/* ✅ Step 6: Download Template button */}
+            <button
+              type="button"
+              onClick={() => downloadForecastTemplate({ includeSampleRow: true })}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-extrabold text-gray-900 shadow-sm hover:bg-gray-50"
+              title="Download an Excel template with correct sheets and headers"
+            >
+              Download Template
+            </button>
+
+            {/* ✅ Step 7: Export Excel button (NEW) */}
+            <button
+              type="button"
+              onClick={async () => {
+                const all = {};
+                for (const pk of ["connected", "tre", "csc"]) {
+                  all[pk] = (await loadProgramState(pk)) || {};
+                }
+                exportForecastWorkbook(all, { fileName: "forecast-export.xlsx" });
+              }}
+              className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-extrabold text-gray-900 shadow-sm hover:bg-gray-50"
+              title="Export current data (Connected / TRE / CSC) to Excel"
+            >
+              Export Excel
+            </button>
           </div>
 
           <div className="flex flex-wrap gap-3 lg:justify-end">
@@ -432,10 +679,14 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
       {/* Active section container */}
       <div className="px-6 pb-10">
-        <div className={["mt-6 rounded-3xl border p-6", activeMeta.panel].join(" ")}>
+        <div
+          className={["mt-6 rounded-3xl border p-6", activeMeta.panel].join(" ")}
+        >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className={["text-xl font-extrabold", activeMeta.header].join(" ")}>
+              <div
+                className={["text-xl font-extrabold", activeMeta.header].join(" ")}
+              >
                 {activeMeta.title}
               </div>
               <div className="mt-1 text-sm font-semibold text-gray-600">
@@ -627,6 +878,77 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
           ) : null}
         </div>
       </div>
+
+      {/* ✅ Step 3/5: Import modal render (ONLY ONCE) */}
+      <ImportExcelModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onApply={async (programs, meta) => {
+          const mode = meta?.mode || "replace";
+
+          // Apply + save all programs in one click
+          for (const pk of ["connected", "tre", "csc"]) {
+            const p = programs?.[pk];
+            if (!p) continue;
+
+            // Replace behavior stays the same
+            if (mode === "replace") {
+              const stateToSave = applyExcelImport(
+                { [pk]: p },
+                { mode, programKeyOverride: pk }
+              );
+
+              if (stateToSave) {
+                await saveProgramState(pk, stateToSave);
+              }
+              continue;
+            }
+
+            // Merge semantics: merge into existing Firestore state (by name) then save
+            const imported = applyExcelImport(
+              { [pk]: p },
+              { mode: "merge", programKeyOverride: pk }
+            );
+
+            if (!imported) continue;
+
+            const existing = (await loadProgramState(pk)) || {};
+
+            const merged = {
+              internalLaborItems: mergeByName(
+                Array.isArray(existing.internalLaborItems)
+                  ? existing.internalLaborItems
+                  : [],
+                imported.internalLaborItems
+              ),
+              tnsItems: mergeByName(
+                Array.isArray(existing.tnsItems) ? existing.tnsItems : [],
+                imported.tnsItems
+              ),
+              contractors: mergeByName(
+                Array.isArray(existing.contractors) ? existing.contractors : [],
+                imported.contractors
+              ),
+              sows: mergeByName(
+                Array.isArray(existing.sows) ? existing.sows : [],
+                imported.sows
+              ),
+
+              // keep logs on merge
+              externalChangeLog: Array.isArray(existing.externalChangeLog)
+                ? existing.externalChangeLog
+                : [],
+              tnsChangeLog: Array.isArray(existing.tnsChangeLog)
+                ? existing.tnsChangeLog
+                : [],
+            };
+
+            await saveProgramState(pk, merged);
+          }
+
+          setImportOpen(false);
+        }}
+      />
     </div>
   );
 }
