@@ -120,6 +120,7 @@ export default function ToolsServicesDetails({
     items,
     setItems,
     onLog,
+    onCommitNow, // ✅ NEW (Update button support)
 }) {
     // Persist expanded cards per program (T&S)
     const expandedKey = `pfc.${programKey}.ui.tns.expandedIds`;
@@ -424,12 +425,22 @@ export default function ToolsServicesDetails({
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="text-sm font-semibold text-gray-900">Tool / Service Name (editable)</div>
 
-                                        <button
-                                            onClick={() => removeItem(s.id)}
-                                            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
-                                        >
-                                            Remove
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            {/* ✅ NEW: Update button (before Remove) */}
+                                            <button
+                                                onClick={() => onCommitNow?.()}
+                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                                            >
+                                                Update
+                                            </button>
+
+                                            <button
+                                                onClick={() => removeItem(s.id)}
+                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <input

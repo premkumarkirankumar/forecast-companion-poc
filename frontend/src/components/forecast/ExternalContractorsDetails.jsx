@@ -95,6 +95,7 @@ export default function ExternalContractorsDetails({
   contractors,
   setContractors,
   onLog,
+  onCommitNow, // ✅ NEW (Update button support)
 }) {
   // ✅ Persist expanded cards per program (contractors)
   const expandedKey = `pfc.${programKey}.ui.contractors.expandedIds`;
@@ -407,6 +408,20 @@ export default function ExternalContractorsDetails({
     });
   }
 
+  // ✅ NEW: Update button handler (no logic change; just an explicit "commit" trigger)
+  function commitNow(id) {
+    const existing = contractors.find((c) => c.id === id);
+
+    onLog?.({
+      action: "UPDATE_CONTRACTOR",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+    });
+
+    onCommitNow?.();
+  }
+
   const subtlePanel =
     "rounded-2xl border border-blue-200/60 bg-blue-50/30 p-5 shadow-sm";
 
@@ -587,6 +602,14 @@ export default function ExternalContractorsDetails({
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* ✅ NEW: Update button (before Regenerate, before Remove) */}
+                        <button
+                          onClick={() => commitNow(c.id)}
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                        >
+                          Update
+                        </button>
+
                         <button
                           onClick={() => regenerateFromRateHoursWeeks(c.id)}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"

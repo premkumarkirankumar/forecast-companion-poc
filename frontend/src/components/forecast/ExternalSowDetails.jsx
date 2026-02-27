@@ -72,7 +72,13 @@ function hasValue(v) {
 /* =========================
    Main Component
 ========================= */
-export default function ExternalSowDetails({ programKey, sows, setSows, onLog }) {
+export default function ExternalSowDetails({
+  programKey,
+  sows,
+  setSows,
+  onLog,
+  onCommitNow, // ✅ NEW (Update button support)
+}) {
   // ✅ Persist expanded cards per program (SOW)
   const expandedKey = `pfc.${programKey}.ui.sow.expandedIds`;
   const [expandedIds, setExpandedIds] = useState(() => {
@@ -182,25 +188,28 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
 
   function updateName(id, name) {
     const existing = sows.find((s) => s.id === id);
-    updateSow(id, (s) => ({ ...s, name }));
+    const before = String(existing?.name ?? "");
+    const after = String(name ?? "");
+
+    // ✅ avoid noisy logs
+    if (before === after) return;
+
+    updateSow(id, (s) => ({ ...s, name: after }));
+
     onLog?.({
       action: "UPDATE_SOW_NAME",
       entityType: "sow",
       entityId: id,
       entityName: existing?.name,
       field: "name",
-      from: existing?.name,
-      to: name,
+      from: before,
+      to: after,
     });
   }
 
   function updateSplit(id, msPct, nfPct) {
     const existing = sows.find((s) => s.id === id);
     const nextSplit = normalizeSplit(msPct, nfPct);
-    updateSow(id, (s) => {
-      const next = { ...s, ...nextSplit };
-      return recomputeFromYearTarget(next);
-    });
 
     // ✅ log only if something really changed
     if (
@@ -217,6 +226,11 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
         to: { msPct: nextSplit.msPct, nfPct: nextSplit.nfPct },
       });
     }
+
+    updateSow(id, (s) => {
+      const next = { ...s, ...nextSplit };
+      return recomputeFromYearTarget(next);
+    });
   }
 
   function setYearTarget(id, value) {
@@ -224,13 +238,18 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
     const val = Number.isFinite(v) ? v : 0;
 
     const existing = sows.find((s) => s.id === id);
+    const before = num(existing?.yearTargetTotal ?? 0);
+
+    // ✅ avoid noisy logs
+    if (before === val) return;
+
     onLog?.({
       action: "UPDATE_SOW_YEAR_TARGET",
       entityType: "sow",
       entityId: id,
       entityName: existing?.name,
       field: "yearTargetTotal",
-      from: existing?.yearTargetTotal,
+      from: before,
       to: val,
     });
 
@@ -244,8 +263,15 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
     const val = Number.isFinite(v) ? v : 0;
 
     const existing = sows.find((s) => s.id === id);
-    const from =
-      kind === "ms" ? existing?.msLocked?.[month] : existing?.nfLocked?.[month];
+
+    // ✅ "before" should be what user sees in the grid, not locked (locked can be undefined)
+    const before =
+      kind === "ms"
+        ? num(existing?.msByMonth?.[month] ?? 0)
+        : num(existing?.nfByMonth?.[month] ?? 0);
+
+    // ✅ avoid noisy logs
+    if (before === val) return;
 
     onLog?.({
       action: kind === "ms" ? "EDIT_SOW_MS_MONTH" : "EDIT_SOW_NF_MONTH",
@@ -253,7 +279,7 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
       entityId: id,
       entityName: existing?.name,
       field: `${kind}.${month}`,
-      from,
+      from: before,
       to: val,
     });
 
@@ -264,7 +290,7 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
     });
   }
 
-  // ✅ NEW: Regenerate button handler (per SOW)
+  // ✅ Regenerate button handler (per SOW)
   // Behavior: clears locks and recomputes months from year target + split.
   function regenerateSow(id) {
     const existing = sows.find((s) => s.id === id);
@@ -280,6 +306,20 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
       const next = { ...s, msLocked: {}, nfLocked: {} };
       return recomputeFromYearTarget(next);
     });
+  }
+
+  // ✅ NEW: Update button handler (no logic change; just an explicit "commit" trigger)
+  function commitNow(id) {
+    const existing = sows.find((s) => s.id === id);
+
+    onLog?.({
+      action: "UPDATE_SOW",
+      entityType: "sow",
+      entityId: id,
+      entityName: existing?.name,
+    });
+
+    onCommitNow?.();
   }
 
   const subtlePanel =
@@ -453,7 +493,15 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* ✅ NEW: Regenerate button (matches contractor behavior style) */}
+                        {/* ✅ NEW: Update button (before Regenerate, before Remove) */}
+                        <button
+                          type="button"
+                          onClick={() => commitNow(s.id)}
+                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                        >
+                          Update
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => regenerateSow(s.id)}
@@ -463,6 +511,7 @@ export default function ExternalSowDetails({ programKey, sows, setSows, onLog })
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => removeSow(s.id)}
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
                         >

@@ -459,6 +459,37 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     isHydrating,
   ]);
 
+  // ✅ NEW: immediate save helper for "Update" buttons in details pages
+  function commitNow(source) {
+    if (isHydrating) return;
+
+    const stateToSave = {
+      internalLaborItems,
+      contractors,
+      sows,
+      externalChangeLog,
+      tnsItems,
+      tnsChangeLog,
+    };
+
+    saveProgramState(programKey, stateToSave).catch((e) => {
+      console.error("Failed to save Firestore program state (commitNow):", e);
+    });
+
+    addAutoLogEntry({
+      program: programKey,
+      area:
+        source === "tools"
+          ? "Tools & Services"
+          : source === "external"
+          ? "External"
+          : "Internal",
+      action: "UPDATE_BUTTON_COMMIT",
+      details: `Manual Update clicked (${source})`,
+      meta: { source },
+    });
+  }
+
   // Rollups
   const contractorsRollup = useMemo(
     () => computeRollup(contractors),
@@ -659,7 +690,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
           <div className="flex items-center justify-between gap-4">
             <div>
               <div
-                className={["text-xl font-extrabold", activeMeta.header].join(" ")}
+                className={[
+                  "text-xl font-extrabold",
+                  activeMeta.header,
+                ].join(" ")}
               >
                 {activeMeta.title}
               </div>
@@ -780,6 +814,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   items={tnsItems}
                   setItems={setTnsItems}
                   onLog={logTns}
+                  onCommitNow={() => commitNow("tools")}
                 />
               </div>
             </div>
@@ -845,6 +880,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   contractors={contractors}
                   setContractors={setContractors}
                   onLog={logExternal}
+                  onCommitNow={() => commitNow("external")}
                 />
 
                 <ExternalSowDetails
@@ -852,6 +888,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   sows={sows}
                   setSows={setSows}
                   onLog={logExternal}
+                  onCommitNow={() => commitNow("external")}
                 />
               </div>
             </div>
