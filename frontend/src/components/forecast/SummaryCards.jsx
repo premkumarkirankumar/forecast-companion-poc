@@ -216,7 +216,9 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         id: crypto.randomUUID(),
         name: String(r.name ?? r["FTE Name"] ?? "").trim(),
         runPct: clampPct(r.runPct ?? r["Run %"] ?? 0),
-        growthPct: clampPct(r.growthPct ?? r["Grow %"] ?? 0),
+        growthPct: clampPct(
+          r.growPct ?? r.growthPct ?? r["Grow %"] ?? r["Growth %"] ?? 0
+        ),
       }))
       .filter((x) => x.name);
 
