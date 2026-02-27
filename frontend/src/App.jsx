@@ -70,6 +70,9 @@ export default function App() {
   }, [selectedProgram]);
 
   const [tnsItems, setTnsItems] = useState(seedTns);
+
+  // NOTE: In your current app, this is always false.
+  // SummaryCards is the owner of program Firestore state.
   const showToolsServicesOnly = useMemo(() => false, []);
 
   const [isHydrating, setIsHydrating] = useState(false);
@@ -77,8 +80,10 @@ export default function App() {
   // ✅ AI Drawer state
   const [aiOpen, setAiOpen] = useState(false);
 
-  // ✅ Load Firestore on program change
+  // ✅ Load Firestore on program change (ONLY if ToolsServicesDetails is being used here)
   useEffect(() => {
+    if (!showToolsServicesOnly) return;
+
     let cancelled = false;
 
     async function run() {
@@ -103,20 +108,21 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedProgram]);
+  }, [selectedProgram, showToolsServicesOnly]);
 
-  // ✅ Save Firestore (debounced)
+  // ✅ Save Firestore (debounced) (ONLY if ToolsServicesDetails is being used here)
   useEffect(() => {
+    if (!showToolsServicesOnly) return;
     if (isHydrating) return;
 
     const t = setTimeout(() => {
       (async () => {
         try {
-          // ✅ IMPORTANT: Do NOT overwrite the entire program state with only { tnsItems }.
-          // SummaryCards saves the full program state (internal/external/tns/logs).
-          // Here we merge existing state and only update tnsItems to avoid wiping sows/contractors.
+          // ✅ IMPORTANT: Don't overwrite the entire program state with only { tnsItems }.
+          // Load existing state and merge, overriding only tnsItems.
           const existing = (await loadProgramState(selectedProgram)) || {};
           const nextState = { ...existing, tnsItems };
+
           await saveProgramState(selectedProgram, nextState);
         } catch (e) {
           console.error("Failed to save Firestore state:", e);
@@ -125,7 +131,7 @@ export default function App() {
     }, 800);
 
     return () => clearTimeout(t);
-  }, [selectedProgram, tnsItems, isHydrating]);
+  }, [selectedProgram, tnsItems, isHydrating, showToolsServicesOnly]);
 
   if (page === "changelog") {
     return (
@@ -173,7 +179,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* ✅ NEW: Data Management button (before AI Advisor) */}
             <button
               onClick={() => setPage("data")}
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
@@ -181,7 +186,6 @@ export default function App() {
               Data Management
             </button>
 
-            {/* ✅ AI button (matches Tailwind style) */}
             <button
               onClick={() => setAiOpen(true)}
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
@@ -221,7 +225,6 @@ export default function App() {
         )}
       </div>
 
-      {/* ✅ Assistant Drawer */}
       <AssistantDrawer
         open={aiOpen}
         onClose={() => setAiOpen(false)}
