@@ -1,5 +1,5 @@
 // frontend/src/components/forecast/TrendsPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MONTHS } from "../../data/hub";
 import { fmt } from "../../lib/forecast/format";
 
@@ -52,7 +52,9 @@ function StatCard({ title, value, sub }) {
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
       <div className="text-xs font-semibold text-gray-600">{title}</div>
       <div className="mt-1 text-2xl font-extrabold text-gray-900">{value}</div>
-      {sub ? <div className="mt-1 text-xs font-semibold text-gray-500">{sub}</div> : null}
+      {sub ? (
+        <div className="mt-1 text-xs font-semibold text-gray-500">{sub}</div>
+      ) : null}
     </div>
   );
 }
@@ -63,9 +65,11 @@ function StatCard({ title, value, sub }) {
 
 function StackedBars({
   months,
-  series, // [{ key, label, valuesByMonth, className }]
+  series, // [{ key, label, valuesByMonth, className, swatchClassName }]
   height = 220,
 }) {
+  const containerRef = useRef(null);
+
   const totals = months.map((m) =>
     series.reduce((acc, s) => acc + Number(s.valuesByMonth?.[m] ?? 0), 0)
   );
@@ -73,26 +77,59 @@ function StackedBars({
 
   // basic sizing
   const width = 900;
-  const padL = 40;
+  const padL = 72; // more left padding to prevent overlap
   const padR = 16;
-  const padT = 12;
+  const padT = 18; // headroom for totals
   const padB = 34;
 
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
 
   const barGap = 8;
-  const barW = Math.max(10, (plotW - barGap * (months.length - 1)) / months.length);
+  const barW = Math.max(
+    10,
+    (plotW - barGap * (months.length - 1)) / months.length
+  );
 
   function yScale(v) {
     return padT + plotH - (Number(v) / maxY) * plotH;
+  }
+
+  // UI-only tooltip
+  const [hover, setHover] = useState(null);
+  // hover = { month, x, y, total, parts: [{label,value}] }
+
+  function clearHover() {
+    setHover(null);
+  }
+
+  function updateHoverPosition(e, month) {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const parts = series.map((s) => ({
+      key: s.key,
+      label: s.label,
+      value: Number(s.valuesByMonth?.[month] ?? 0),
+      swatchClassName: s.swatchClassName,
+    }));
+
+    const total = parts.reduce((a, p) => a + Number(p.value ?? 0), 0);
+
+    setHover({ month, x, y, total, parts });
   }
 
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-extrabold text-gray-900">Monthly total spend (stacked)</div>
+          <div className="text-sm font-extrabold text-gray-900">
+            Monthly total spend (stacked)
+          </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
             External Contractors + External SOW + Tools & Services
           </div>
@@ -101,22 +138,84 @@ function StackedBars({
         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
           {series.map((s) => (
             <div key={s.key} className="flex items-center gap-2">
-              <span className={["inline-block h-3 w-3 rounded", s.className].join(" ")} />
+              <span
+                className={[
+                  "inline-block h-3 w-3 rounded",
+                  s.swatchClassName || "bg-gray-300",
+                ].join(" ")}
+              />
               <span className="text-gray-700">{s.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="mt-3 overflow-x-auto">
-        <svg width={width} height={height} className="min-w-[900px]">
-          {/* y axis labels (0, 50%, 100%) */}
+      <div
+        ref={containerRef}
+        className="relative mt-3 overflow-x-auto"
+        onMouseLeave={clearHover}
+      >
+        {hover ? (
+          <div
+            className="pointer-events-none absolute z-10 w-64 rounded-xl border bg-white p-3 text-xs shadow-lg"
+            style={{
+              left: Math.min(
+                Math.max(8, hover.x + 12),
+                (containerRef.current?.clientWidth || 0) - 268
+              ),
+              top: Math.max(8, hover.y + 12),
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="font-extrabold text-gray-900">{hover.month}</div>
+              <div className="font-extrabold text-gray-900">
+                {fmt(hover.total)}
+              </div>
+            </div>
+            <div className="mt-2 space-y-1">
+              {hover.parts.map((p) => (
+                <div key={p.key} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={[
+                        "inline-block h-2.5 w-2.5 rounded",
+                        p.swatchClassName || "bg-gray-300",
+                      ].join(" ")}
+                    />
+                    <span className="font-semibold text-gray-700">
+                      {p.label}
+                    </span>
+                  </div>
+                  <span className="font-extrabold text-gray-900">
+                    {fmt(p.value)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 border-t pt-2 text-[11px] font-semibold text-gray-500">
+              Hover over bars to see breakdown
+            </div>
+          </div>
+        ) : null}
+
+        <svg
+          width={width}
+          height={height}
+          className="min-w-[900px]"
+          onMouseLeave={clearHover}
+        >
           {[0, 0.5, 1].map((t) => {
             const v = maxY * t;
             const y = yScale(v);
             return (
               <g key={t}>
-                <line x1={padL} x2={width - padR} y1={y} y2={y} stroke="#EEF2F7" />
+                <line
+                  x1={padL}
+                  x2={width - padR}
+                  y1={y}
+                  y2={y}
+                  stroke="#EEF2F7"
+                />
                 <text x={8} y={y + 4} fontSize="10" fill="#6B7280">
                   {fmt(v)}
                 </text>
@@ -124,13 +223,18 @@ function StackedBars({
             );
           })}
 
-          {/* bars */}
           {months.map((m, i) => {
             const x = padL + i * (barW + barGap);
             let acc = 0;
+            const total = totals[i];
+            const yTop = yScale(total);
 
             return (
-              <g key={m}>
+              <g
+                key={m}
+                onMouseEnter={(e) => updateHoverPosition(e, m)}
+                onMouseMove={(e) => updateHoverPosition(e, m)}
+              >
                 {series.map((s) => {
                   const v = Number(s.valuesByMonth?.[m] ?? 0);
                   const y1 = yScale(acc + v);
@@ -147,9 +251,23 @@ function StackedBars({
                       height={h}
                       className={s.className}
                       rx="6"
+                      style={{ cursor: "pointer" }}
                     />
                   );
                 })}
+
+                {total > 0 ? (
+                  <text
+                    x={x + barW / 2}
+                    y={Math.max(12, yTop - 8)}
+                    textAnchor="middle"
+                    fontSize="10"
+                    fill="#111827"
+                    fontWeight="700"
+                  >
+                    {fmt(total)}
+                  </text>
+                ) : null}
 
                 <text
                   x={x + barW / 2}
@@ -171,7 +289,7 @@ function StackedBars({
 
 function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
   const width = 900;
-  const padL = 40;
+  const padL = 72; // more left padding to prevent overlap
   const padR = 16;
   const padT = 12;
   const padB = 34;
@@ -181,7 +299,12 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
 
   const maxY = Math.max(
     1,
-    ...months.map((m) => Math.max(Number(msByMonth?.[m] ?? 0), Number(nfByMonth?.[m] ?? 0)))
+    ...months.map((m) =>
+      Math.max(
+        Number(msByMonth?.[m] ?? 0),
+        Number(nfByMonth?.[m] ?? 0)
+      )
+    )
   );
 
   function xFor(i) {
@@ -203,7 +326,9 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-extrabold text-gray-900">MS vs NF over time</div>
+          <div className="text-sm font-extrabold text-gray-900">
+            MS vs NF over time
+          </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
             Total MS and total NF by month
           </div>
@@ -223,13 +348,18 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
 
       <div className="mt-3 overflow-x-auto">
         <svg width={width} height={height} className="min-w-[900px]">
-          {/* grid */}
           {[0, 0.5, 1].map((t) => {
             const v = maxY * t;
             const y = yFor(v);
             return (
               <g key={t}>
-                <line x1={padL} x2={width - padR} y1={y} y2={y} stroke="#EEF2F7" />
+                <line
+                  x1={padL}
+                  x2={width - padR}
+                  y1={y}
+                  y2={y}
+                  stroke="#EEF2F7"
+                />
                 <text x={8} y={y + 4} fontSize="10" fill="#6B7280">
                   {fmt(v)}
                 </text>
@@ -237,7 +367,6 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
             );
           })}
 
-          {/* lines */}
           <polyline
             points={pointsFor(msByMonth)}
             fill="none"
@@ -251,7 +380,6 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
             strokeWidth="2.5"
           />
 
-          {/* dots + month labels */}
           {months.map((m, i) => {
             const x = xFor(i);
             const yMS = yFor(Number(msByMonth?.[m] ?? 0));
@@ -260,7 +388,13 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
               <g key={m}>
                 <circle cx={x} cy={yMS} r="3.2" fill="#111827" />
                 <circle cx={x} cy={yNF} r="3.2" fill="#9CA3AF" />
-                <text x={x} y={height - 12} textAnchor="middle" fontSize="10" fill="#6B7280">
+                <text
+                  x={x}
+                  y={height - 12}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill="#6B7280"
+                >
                   {m}
                 </text>
               </g>
@@ -276,7 +410,13 @@ function TwoLineChart({ months, msByMonth, nfByMonth, height = 220 }) {
    Main Page
 ------------------------------ */
 
-export default function TrendsPage({ selectedProgram, onBack }) {
+const PROGRAM_OPTIONS = [
+  { value: "connected", label: "Connected" },
+  { value: "tre", label: "TRE" },
+  { value: "csc", label: "CSC" },
+];
+
+export default function TrendsPage({ selectedProgram, onProgramChange, onBack }) {
   const programKey = selectedProgram || "connected";
 
   // Keys (same model as SummaryCards)
@@ -323,12 +463,11 @@ export default function TrendsPage({ selectedProgram, onBack }) {
       });
     }
 
-    // refresh immediately on program change
     refresh();
 
     window.addEventListener("pfc:storage", refresh);
     window.addEventListener("pfc:autolog", refresh);
-    window.addEventListener("storage", refresh); // cross-tab
+    window.addEventListener("storage", refresh);
 
     return () => {
       window.removeEventListener("pfc:storage", refresh);
@@ -338,12 +477,17 @@ export default function TrendsPage({ selectedProgram, onBack }) {
   }, [internalItemsKey, contractorsKey, sowKey, tnsItemsKey]);
 
   // Build monthly totals
-  const contractorsRoll = useMemo(() => sumByMonth(snapshot.contractors), [snapshot.contractors]);
+  const contractorsRoll = useMemo(
+    () => sumByMonth(snapshot.contractors),
+    [snapshot.contractors]
+  );
   const sowRoll = useMemo(() => sumByMonth(snapshot.sows), [snapshot.sows]);
   const tnsRoll = useMemo(() => sumByMonth(snapshot.tns), [snapshot.tns]);
 
   const byMonth = useMemo(() => {
-    const out = Object.fromEntries(MONTHS.map((m) => [m, { ms: 0, nf: 0, total: 0 }]));
+    const out = Object.fromEntries(
+      MONTHS.map((m) => [m, { ms: 0, nf: 0, total: 0 }])
+    );
 
     for (const m of MONTHS) {
       const ms =
@@ -402,32 +546,64 @@ export default function TrendsPage({ selectedProgram, onBack }) {
   }, [visibleMonths, contractorsRoll, sowRoll, tnsRoll]);
 
   const internalFteCount = useMemo(() => {
-    // keep simple: count entries (your internal logic may differ, but this gives a live number)
     return Array.isArray(snapshot.internal) ? snapshot.internal.length : 0;
   }, [snapshot.internal]);
 
   // Chart series (stacked by category)
   const stackedSeries = useMemo(() => {
     const contractorsTotalByMonth = Object.fromEntries(
-      MONTHS.map((m) => [m, Number(contractorsRoll.ms[m] ?? 0) + Number(contractorsRoll.nf[m] ?? 0)])
+      MONTHS.map((m) => [
+        m,
+        Number(contractorsRoll.ms[m] ?? 0) + Number(contractorsRoll.nf[m] ?? 0),
+      ])
     );
     const sowTotalByMonth = Object.fromEntries(
-      MONTHS.map((m) => [m, Number(sowRoll.ms[m] ?? 0) + Number(sowRoll.nf[m] ?? 0)])
+      MONTHS.map((m) => [
+        m,
+        Number(sowRoll.ms[m] ?? 0) + Number(sowRoll.nf[m] ?? 0),
+      ])
     );
     const tnsTotalByMonth = Object.fromEntries(
-      MONTHS.map((m) => [m, Number(tnsRoll.ms[m] ?? 0) + Number(tnsRoll.nf[m] ?? 0)])
+      MONTHS.map((m) => [
+        m,
+        Number(tnsRoll.ms[m] ?? 0) + Number(tnsRoll.nf[m] ?? 0),
+      ])
     );
 
     return [
-      { key: "tns", label: "Tools & Services", valuesByMonth: tnsTotalByMonth, className: "fill-purple-400" },
-      { key: "contractors", label: "External Contractors", valuesByMonth: contractorsTotalByMonth, className: "fill-green-400" },
-      { key: "sow", label: "External SOW", valuesByMonth: sowTotalByMonth, className: "fill-emerald-600" },
+      {
+        key: "tns",
+        label: "Tools & Services",
+        valuesByMonth: tnsTotalByMonth,
+        className: "fill-purple-400",
+        swatchClassName: "bg-purple-400",
+      },
+      {
+        key: "contractors",
+        label: "External Contractors",
+        valuesByMonth: contractorsTotalByMonth,
+        className: "fill-green-400",
+        swatchClassName: "bg-green-400",
+      },
+      {
+        key: "sow",
+        label: "External SOW",
+        valuesByMonth: sowTotalByMonth,
+        className: "fill-emerald-600",
+        swatchClassName: "bg-emerald-600",
+      },
     ];
   }, [contractorsRoll, sowRoll, tnsRoll]);
 
   // Line chart (MS vs NF)
-  const msByMonth = useMemo(() => Object.fromEntries(MONTHS.map((m) => [m, byMonth[m].ms])), [byMonth]);
-  const nfByMonth = useMemo(() => Object.fromEntries(MONTHS.map((m) => [m, byMonth[m].nf])), [byMonth]);
+  const msByMonth = useMemo(
+    () => Object.fromEntries(MONTHS.map((m) => [m, byMonth[m].ms])),
+    [byMonth]
+  );
+  const nfByMonth = useMemo(
+    () => Object.fromEntries(MONTHS.map((m) => [m, byMonth[m].nf])),
+    [byMonth]
+  );
 
   // Contributors table
   const contributors = useMemo(() => {
@@ -451,8 +627,6 @@ export default function TrendsPage({ selectedProgram, onBack }) {
 
   const msShare = sums.grandTotal > 0 ? sums.msTotal / sums.grandTotal : 0;
   const nfShare = sums.grandTotal > 0 ? sums.nfTotal / sums.grandTotal : 0;
-  const extShare = sums.grandTotal > 0 ? sums.extTotal / sums.grandTotal : 0;
-  const tnsShare = sums.grandTotal > 0 ? sums.tnsTotal / sums.grandTotal : 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -460,8 +634,21 @@ export default function TrendsPage({ selectedProgram, onBack }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-2xl font-extrabold text-gray-900">Trends</div>
-            <div className="mt-1 text-sm font-semibold text-gray-600">
-              Program: <span className="font-extrabold text-gray-900">{programKey}</span>
+
+            {/* ✅ Program dropdown restored (UI-only) */}
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="text-sm font-semibold text-gray-600">Program</div>
+              <select
+                value={programKey}
+                onChange={(e) => onProgramChange?.(e.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-extrabold text-gray-900 shadow-sm"
+              >
+                {PROGRAM_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -480,14 +667,20 @@ export default function TrendsPage({ selectedProgram, onBack }) {
         <div className="mt-5 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="text-sm font-extrabold text-gray-900">Month range</div>
-              <div className="mt-1 text-xs font-semibold text-gray-500">{viewLabel}</div>
+              <div className="text-sm font-extrabold text-gray-900">
+                Month range
+              </div>
+              <div className="mt-1 text-xs font-semibold text-gray-500">
+                {viewLabel}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-3">
                 <div className="text-xs font-semibold text-gray-600">Start</div>
-                <div className="text-xs font-extrabold text-gray-900">{MONTHS[normalized.s]}</div>
+                <div className="text-xs font-extrabold text-gray-900">
+                  {MONTHS[normalized.s]}
+                </div>
                 <input
                   type="range"
                   min={0}
@@ -500,7 +693,9 @@ export default function TrendsPage({ selectedProgram, onBack }) {
 
               <div className="flex items-center gap-3">
                 <div className="text-xs font-semibold text-gray-600">End</div>
-                <div className="text-xs font-extrabold text-gray-900">{MONTHS[normalized.e]}</div>
+                <div className="text-xs font-extrabold text-gray-900">
+                  {MONTHS[normalized.e]}
+                </div>
                 <input
                   type="range"
                   min={0}
@@ -523,29 +718,30 @@ export default function TrendsPage({ selectedProgram, onBack }) {
               </button>
 
               <div className="text-xs font-semibold text-gray-600">
-                Selected months: <span className="font-extrabold text-gray-900">{visibleMonths.length}</span>
+                Selected months:{" "}
+                <span className="font-extrabold text-gray-900">
+                  {visibleMonths.length}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Widget 1: KPI cards */}
+        {/* KPI cards */}
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Total spend (selected months)"
             value={fmt(sums.grandTotal)}
-            sub={`${visibleMonths.length} months • Run rate ${fmt(sums.runRate)}/mo`}
+            sub={`${visibleMonths.length} months • Run rate ${fmt(
+              sums.runRate
+            )}/mo`}
           />
           <StatCard
             title="MS vs NF split"
-            value={`${pct(msShare)} MS`}
+            value={`${pct(msShare)} MS • ${pct(nfShare)} NF`}
             sub={`${fmt(sums.msTotal)} MS • ${fmt(sums.nfTotal)} NF`}
           />
-          <StatCard
-            title="External vs Tools & Services"
-            value={`${pct(extShare)} External`}
-            sub={`${fmt(sums.extTotal)} External • ${fmt(sums.tnsTotal)} T&S`}
-          />
+          {/* External vs Tools & Services card removed per request */}
           <StatCard
             title="Internal (FTE entries)"
             value={`${internalFteCount}`}
@@ -553,21 +749,27 @@ export default function TrendsPage({ selectedProgram, onBack }) {
           />
         </div>
 
-        {/* Widget 2: Stacked monthly spend */}
+        {/* Stacked monthly spend */}
         <div className="mt-6">
           <StackedBars months={visibleMonths} series={stackedSeries} />
         </div>
 
-        {/* Widget 3: MS vs NF line */}
+        {/* MS vs NF line */}
         <div className="mt-6">
-          <TwoLineChart months={visibleMonths} msByMonth={msByMonth} nfByMonth={nfByMonth} />
+          <TwoLineChart
+            months={visibleMonths}
+            msByMonth={msByMonth}
+            nfByMonth={nfByMonth}
+          />
         </div>
 
-        {/* Widget 4: Top contributors table */}
+        {/* Top contributors table */}
         <div className="mt-6 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-extrabold text-gray-900">Top contributors</div>
+              <div className="text-sm font-extrabold text-gray-900">
+                Top contributors
+              </div>
               <div className="mt-0.5 text-xs font-semibold text-gray-500">
                 Totals across selected months
               </div>
@@ -578,28 +780,52 @@ export default function TrendsPage({ selectedProgram, onBack }) {
             <table className="min-w-[760px] w-full text-left">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Category</th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Total</th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Avg / Month</th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">% of Total</th>
+                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                    Category
+                  </th>
+                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                    Total
+                  </th>
+                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                    Avg / Month
+                  </th>
+                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                    % of Total
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {contributors.map((r) => (
                   <tr key={r.label}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{r.label}</td>
-                    <td className="px-4 py-3 text-sm font-extrabold text-gray-900">{fmt(r.total)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{fmt(r.avgPerMonth)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-700">{pct(r.pctOfTotal)}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                      {r.label}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                      {fmt(r.total)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                      {fmt(r.avgPerMonth)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-700">
+                      {pct(r.pctOfTotal)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">Grand Total</td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">{fmt(sums.grandTotal)}</td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">{fmt(sums.runRate)}</td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">100%</td>
+                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                    Grand Total
+                  </td>
+                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                    {fmt(sums.grandTotal)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                    {fmt(sums.runRate)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                    100%
+                  </td>
                 </tr>
               </tfoot>
             </table>

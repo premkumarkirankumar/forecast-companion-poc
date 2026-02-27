@@ -110,9 +110,18 @@ export default function App() {
     if (isHydrating) return;
 
     const t = setTimeout(() => {
-      saveProgramState(selectedProgram, { tnsItems }).catch((e) => {
-        console.error("Failed to save Firestore state:", e);
-      });
+      (async () => {
+        try {
+          // ✅ IMPORTANT: Do NOT overwrite the entire program state with only { tnsItems }.
+          // SummaryCards saves the full program state (internal/external/tns/logs).
+          // Here we merge existing state and only update tnsItems to avoid wiping sows/contractors.
+          const existing = (await loadProgramState(selectedProgram)) || {};
+          const nextState = { ...existing, tnsItems };
+          await saveProgramState(selectedProgram, nextState);
+        } catch (e) {
+          console.error("Failed to save Firestore state:", e);
+        }
+      })();
     }, 800);
 
     return () => clearTimeout(t);
@@ -132,6 +141,7 @@ export default function App() {
     return (
       <TrendsPage
         selectedProgram={selectedProgram}
+        onProgramChange={setSelectedProgram}
         onBack={() => setPage("dashboard")}
       />
     );
@@ -207,11 +217,7 @@ export default function App() {
             onProgramChange={setSelectedProgram}
           />
         ) : (
-          <ToolsServicesDetails
-            items={tnsItems}
-            setItems={setTnsItems}
-            onLog={() => {}}
-          />
+          <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />
         )}
       </div>
 

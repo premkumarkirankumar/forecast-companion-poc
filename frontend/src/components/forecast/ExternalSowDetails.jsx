@@ -201,12 +201,11 @@ export default function ExternalSowDetails({
 
     function updateSplit(id, msPct, nfPct) {
         const existing = sows.find((s) => s.id === id);
+        const nextSplit = normalizeSplit(msPct, nfPct);
         updateSow(id, (s) => {
             const next = { ...s, ...nextSplit };
             return recomputeFromYearTarget(next);
         });
-
-        const nextSplit = normalizeSplit(msPct, nfPct);
 
         // ✅ log only if something really changed
         if (
