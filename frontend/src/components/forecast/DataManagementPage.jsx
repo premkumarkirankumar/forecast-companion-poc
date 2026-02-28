@@ -7,6 +7,16 @@ import { loadProgramState, saveProgramState } from "../../data/firestorePrograms
 // NOTE: We are intentionally reusing the SAME behavior you already use.
 // No changes to your existing logic; just placing it on another page.
 
+function adaptImportedProgramToState(p) {
+  if (!p) return null;
+  return {
+    internalLaborItems: Array.isArray(p.internal) ? p.internal : [],
+    tnsItems: Array.isArray(p.tns) ? p.tns : [],
+    contractors: Array.isArray(p.contractors) ? p.contractors : [],
+    sows: Array.isArray(p.sows) ? p.sows : [],
+  };
+}
+
 export default function DataManagementPage({ onBack }) {
   const [importOpen, setImportOpen] = useState(false);
 
@@ -98,11 +108,9 @@ export default function DataManagementPage({ onBack }) {
             const p = programs?.[pk];
             if (!p) continue;
 
-            // We save the imported structure exactly as the existing Import modal outputs.
-            // If your ImportExcelModal already outputs the "stateToSave" shape, keep it.
-            // If it outputs the raw sheet payload, we can reuse your existing SummaryCards apply logic later.
-            // (See Step 3 note below.)
-            await saveProgramState(pk, p);
+            const stateToSave = adaptImportedProgramToState(p);
+            if (!stateToSave) continue;
+            await saveProgramState(pk, stateToSave);
           }
 
           setImportOpen(false);

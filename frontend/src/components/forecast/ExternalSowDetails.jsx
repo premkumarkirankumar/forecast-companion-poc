@@ -71,12 +71,108 @@ function splitFromNf(nfPct) {
 }
 
 function num(v) {
+  if (v === null || v === undefined) return 0;
+
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (s === "") return 0;
+    const cleaned = s.replace(/[$,]/g, "");
+    const x = Number(cleaned);
+    return Number.isFinite(x) ? x : 0;
+  }
+
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
 }
 
 function hasValue(v) {
   return String(v ?? "").trim().length > 0;
+}
+
+function zeroMonthMap() {
+  const m = {};
+  for (const k of MONTHS) m[k] = 0;
+  return m;
+}
+
+function ensureMonthMap(obj) {
+  const m = {};
+  for (const k of MONTHS) m[k] = num(obj?.[k]);
+  return m;
+}
+
+function normalizeSowItem(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  // ✅ New shape already (preferred)
+  if (raw.msByMonth && typeof raw.msByMonth === "object") {
+    const msByMonth = ensureMonthMap(raw.msByMonth);
+    const nfByMonth = ensureMonthMap(raw.nfByMonth);
+
+    // ✅ support multiple possible year fields (including Excel import field: yearTotal)
+    const yearTargetTotal = num(
+      raw.yearTargetTotal ??
+        raw.yearTotal ??
+        raw.yearTarget ??
+        raw.totalPerYear ??
+        raw.yearTotal ??
+        0
+    );
+
+    // Defaults if missing
+    const msPct = Number.isFinite(Number(raw.msPct)) ? num(raw.msPct) : 100;
+    const nfPct = Number.isFinite(Number(raw.nfPct)) ? num(raw.nfPct) : 0;
+
+    return {
+      id: raw.id || crypto.randomUUID(),
+      name: String(raw.name || raw.sowName || "").trim(),
+      yearTargetTotal,
+      msPct,
+      nfPct,
+      msByMonth,
+      nfByMonth,
+      msLocked: raw.msLocked && typeof raw.msLocked === "object" ? raw.msLocked : {},
+      nfLocked: raw.nfLocked && typeof raw.nfLocked === "object" ? raw.nfLocked : {},
+    };
+  }
+
+  // ✅ Older/Imported shape fallback (common from Excel import)
+  // Importer typically returns: { id, name, yearTotal, msPct, nfPct }
+  const yearTargetTotal = num(
+    raw.yearTargetTotal ??
+      raw.yearTotal ??
+      raw.yearTarget ??
+      raw.totalPerYear ??
+      raw.yearTotal ??
+      0
+  );
+
+  const msIn = num(raw.msPct);
+  const nfIn = num(raw.nfPct);
+
+  // Normalize split safely
+  let split;
+  if (msIn > 0 && nfIn === 0) split = splitFromMs(msIn);
+  else if (nfIn > 0 && msIn === 0) split = splitFromNf(nfIn);
+  else split = normalizeSplit(msIn, nfIn);
+
+  const msYear = yearTargetTotal * (split.msPct / 100);
+  const nfYear = yearTargetTotal * (split.nfPct / 100);
+
+  return {
+    id: raw.id || crypto.randomUUID(),
+    name: String(raw.name || raw.sowName || "").trim(),
+    yearTargetTotal,
+    msPct: split.msPct,
+    nfPct: split.nfPct,
+
+    // ✅ compute months immediately so totals populate after import
+    msByMonth: distributeEvenly(msYear, {}),
+    nfByMonth: distributeEvenly(nfYear, {}),
+
+    msLocked: {},
+    nfLocked: {},
+  };
 }
 
 /* =========================
@@ -111,6 +207,15 @@ export default function ExternalSowDetails({
   function isExpanded(id) {
     return expandedIds.includes(id);
   }
+
+  useEffect(() => {
+    const normalized = (sows || []).map(normalizeSowItem).filter(Boolean);
+
+    const needs = (sows || []).some((x) => x && !x.msByMonth);
+    if (needs) setSows(normalized);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function toggleExpanded(id) {
     setExpandedIds((prev) =>
@@ -425,11 +530,11 @@ export default function ExternalSowDetails({
         ) : (
           sows.map((s) => {
             const msYear = MONTHS.reduce(
-              (a, m) => a + (s.msByMonth?.[m] ?? 0),
+              (a, m) => a + num(s.msByMonth?.[m]),
               0
             );
             const nfYear = MONTHS.reduce(
-              (a, m) => a + (s.nfByMonth?.[m] ?? 0),
+              (a, m) => a + num(s.nfByMonth?.[m]),
               0
             );
             const totalYear = msYear + nfYear;
@@ -674,8 +779,7 @@ export default function ExternalSowDetails({
                                 ].join(" ")}
                               >
                                 {fmt(
-                                  (s.msByMonth?.[m] ?? 0) +
-                                    (s.nfByMonth?.[m] ?? 0)
+                                   num(s.msByMonth?.[m]) + num(s.nfByMonth?.[m])
                                 )}
                               </td>
                             ))}
