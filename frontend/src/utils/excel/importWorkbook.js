@@ -41,7 +41,7 @@ const CATEGORY_KEYS = {
 
 // Expected headers (based on your uploaded template)
 const EXPECTED_HEADERS = {
-  internal: ["FTE Name", "Run %", "Grow %"],
+  internal: ["FTE Name", "Run %", "Growth %"],
   tns: ["Tool / Service Name", "Total Per Year", "MS %"],
   contractors: [
     "Contractor Name",
@@ -307,7 +307,7 @@ function parseInternal({ sheet, rows, headerMap, errors, warnings }) {
     const rowNum = i + 1;
     const name = String(row[headerMap[norm("FTE Name")]] ?? "").trim();
     const runPct = toPercent(row[headerMap[norm("Run %")]]);
-    const growPct = toPercent(row[headerMap[norm("Grow %")]]);
+    const growPct = toPercent(row[headerMap[norm("Growth %")]]);
 
     if (!name) {
       errors.push({
@@ -332,16 +332,43 @@ function parseInternal({ sheet, rows, headerMap, errors, warnings }) {
     const grow = growPct === null ? 0 : clampPct(growPct);
 
     if (!validatePct(sheet, rowNum, "Run %", run, errors)) continue;
-    if (!validatePct(sheet, rowNum, "Grow %", grow, errors)) continue;
+    if (!validatePct(sheet, rowNum, "Growth %", grow, errors)) continue;
 
     out.push({
       id: makeId(),
       name,
       runPct: run,
-      growPct: grow,
+      growthPct: grow, // ✅ UI expects this
     });
   }
   return out;
+}
+
+const TNS_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function spreadEven12(total) {
+  const t = Math.round(Number(total) || 0);
+  const base = Math.floor(t / 12);
+  let rem = t - base * 12;
+
+  const arr = TNS_MONTHS.map(() => base);
+  for (let i = 0; i < 12 && rem > 0; i++) {
+    arr[i] += 1;
+    rem -= 1;
+  }
+  return arr;
+}
+
+function monthMapFrom(arr) {
+  const m = {};
+  for (let i = 0; i < 12; i++) m[TNS_MONTHS[i]] = arr[i] ?? 0;
+  return m;
+}
+
+function zeroMonthMap() {
+  const m = {};
+  for (const k of TNS_MONTHS) m[k] = 0;
+  return m;
 }
 
 function parseTns({ sheet, rows, headerMap, errors, warnings }) {
@@ -384,12 +411,21 @@ function parseTns({ sheet, rows, headerMap, errors, warnings }) {
       warn(warnings, sheet, `Total Per Year is 0 for "${name}".`, rowNum, "Total Per Year");
     }
 
+    const fixedMsPct = 100;
+    const fixedNfPct = 0;
+
+    // Put the entire yearly amount into MS (NF locked to 0)
+    const msByMonth = monthMapFrom(spreadEven12(yearTotal));
+    const nfByMonth = zeroMonthMap();
+
     out.push({
       id: makeId(),
       name,
-      yearTotal,
-      msPct,
-      nfPct: clampPct(100 - msPct),
+      yearTargetTotal: yearTotal,
+      msPct: fixedMsPct,
+      nfPct: fixedNfPct,
+      msByMonth,
+      nfByMonth,
     });
   }
   return out;

@@ -31,8 +31,21 @@ function bodyCellClass(m) {
 }
 
 function num(v) {
-    const x = Number(v);
+  if (v === null || v === undefined) return 0;
+
+  // Treat empty string as 0 (important for controlled inputs)
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (s === "") return 0;
+
+    // Remove commas and $ (common when users paste values)
+    const cleaned = s.replace(/[$,]/g, "");
+    const x = Number(cleaned);
     return Number.isFinite(x) ? x : 0;
+  }
+
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
 }
 
 function hasValue(v) {
@@ -44,16 +57,27 @@ function hasValue(v) {
  * lockedByMonth uses MONTHS keys: { Jan: 1000, Feb: undefined, ... }
  */
 function distributeEvenly(total, lockedByMonth) {
-    const lockedSum = MONTHS.reduce((a, m) => a + (lockedByMonth[m] ?? 0), 0);
-    const remaining = Math.max(0, total - lockedSum);
-    const unlockedMonths = MONTHS.filter((m) => lockedByMonth[m] === undefined);
-    const per = unlockedMonths.length ? remaining / unlockedMonths.length : 0;
+  const safeTotal = num(total);
 
-    const out = {};
-    for (const m of MONTHS) {
-        out[m] = lockedByMonth[m] === undefined ? per : lockedByMonth[m];
-    }
-    return out;
+  // Only count locked values if they are finite numbers
+  const lockedSum = MONTHS.reduce((a, m) => {
+    const v = lockedByMonth?.[m];
+    if (v === undefined) return a;
+    const n = num(v);
+    return a + n;
+  }, 0);
+
+  const remaining = Math.max(0, safeTotal - lockedSum);
+
+  // A month is "unlocked" if it has no explicit locked value
+  const unlockedMonths = MONTHS.filter((m) => lockedByMonth?.[m] === undefined);
+  const per = unlockedMonths.length ? remaining / unlockedMonths.length : 0;
+
+  const out = {};
+  for (const m of MONTHS) {
+    out[m] = lockedByMonth?.[m] === undefined ? per : num(lockedByMonth[m]);
+  }
+  return out;
 }
 
 /**
@@ -188,7 +212,7 @@ export default function ToolsServicesDetails({
 
     function recomputeFromYearTarget(s) {
         // MS is 100%, NF is 0%
-        const msYear = s.yearTargetTotal;
+        const msYear = num(s.yearTargetTotal);
         return {
             ...s,
             msByMonth: distributeEvenly(msYear, s.msLocked || {}),

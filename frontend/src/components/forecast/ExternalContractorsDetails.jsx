@@ -38,7 +38,7 @@ function bodyCellClass(m) {
 }
 
 function distributeEvenly(total, lockedByMonth) {
-  const lockedSum = MONTHS.reduce((a, m) => a + (lockedByMonth[m] ?? 0), 0);
+  const lockedSum = MONTHS.reduce((a, m) => a + num(lockedByMonth[m]), 0);
   const remaining = Math.max(0, total - lockedSum);
 
   const unlockedMonths = MONTHS.filter((m) => lockedByMonth[m] === undefined);
@@ -71,12 +71,105 @@ function splitFromNf(nfPct) {
 }
 
 function num(v) {
+  if (v === null || v === undefined) return 0;
+
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (s === "") return 0;
+    const cleaned = s.replace(/[$,]/g, "");
+    const x = Number(cleaned);
+    return Number.isFinite(x) ? x : 0;
+  }
+
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
 }
 
 function hasValue(v) {
   return String(v ?? "").trim().length > 0;
+}
+
+function zeroMonthMap() {
+  const m = {};
+  for (const k of MONTHS) m[k] = 0;
+  return m;
+}
+
+function monthMapFrom12(arr) {
+  const m = {};
+  for (let i = 0; i < 12; i++) m[MONTHS[i]] = num(arr?.[i] ?? 0);
+  return m;
+}
+
+function spreadEven12(total) {
+  const t = Math.round(num(total));
+  const base = Math.floor(t / 12);
+  let rem = t - base * 12;
+  const arr = MONTHS.map(() => base);
+  for (let i = 0; i < 12 && rem > 0; i++) {
+    arr[i] += 1;
+    rem -= 1;
+  }
+  return arr;
+}
+
+function normalizeContractorItem(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const ratePerHour = num(raw.ratePerHour);
+  const hoursPerWeek = num(raw.hoursPerWeek);
+  const weeksPerYear = num(raw.weeksPerYear);
+
+  const yearTargetTotal =
+    num(raw.yearTargetTotal) || ratePerHour * hoursPerWeek * weeksPerYear;
+
+  const msPct = num(raw.msPct ?? 0);
+  const nfPct = num(raw.nfPct ?? 0);
+
+  // If months already exist, keep them (sanitize)
+  if (raw.msByMonth && typeof raw.msByMonth === "object") {
+    const msByMonth = {};
+    const nfByMonth = {};
+    for (const m of MONTHS) {
+      msByMonth[m] = num(raw.msByMonth?.[m]);
+      nfByMonth[m] = num(raw.nfByMonth?.[m]);
+    }
+    return {
+      ...raw,
+      id: raw.id || crypto.randomUUID(),
+      name: String(raw.name || "").trim(),
+      ratePerHour,
+      hoursPerWeek,
+      weeksPerYear,
+      yearTargetTotal,
+      msPct,
+      nfPct,
+      msByMonth,
+      nfByMonth,
+      msLocked: raw.msLocked && typeof raw.msLocked === "object" ? raw.msLocked : {},
+      nfLocked: raw.nfLocked && typeof raw.nfLocked === "object" ? raw.nfLocked : {},
+    };
+  }
+
+  // If months missing (import case), generate them
+  const msYear = (yearTargetTotal * msPct) / 100;
+  const nfYear = (yearTargetTotal * nfPct) / 100;
+
+  return {
+    ...raw,
+    id: raw.id || crypto.randomUUID(),
+    name: String(raw.name || "").trim(),
+    ratePerHour,
+    hoursPerWeek,
+    weeksPerYear,
+    yearTargetTotal,
+    msPct,
+    nfPct,
+    msByMonth: monthMapFrom12(spreadEven12(msYear)),
+    nfByMonth: monthMapFrom12(spreadEven12(nfYear)),
+    msLocked: {},
+    nfLocked: {},
+  };
 }
 
 /* =========================
@@ -125,6 +218,22 @@ export default function ExternalContractorsDetails({
       // ignore
     }
   }, [expandedKey, expandedIds]);
+
+  // ✅ ADD THIS BLOCK RIGHT HERE
+  useEffect(() => {
+    const normalized = (contractors || [])
+      .map(normalizeContractorItem)
+      .filter(Boolean);
+
+    const needs = (contractors || []).some((x) => x && !x.msByMonth);
+
+    if (needs) {
+      setContractors(normalized);
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   function isExpanded(id) {
     return expandedIds.includes(id);
@@ -543,8 +652,8 @@ export default function ExternalContractorsDetails({
           </div>
         ) : (
           contractors.map((c) => {
-            const msYear = MONTHS.reduce((a, m) => a + (c.msByMonth?.[m] ?? 0), 0);
-            const nfYear = MONTHS.reduce((a, m) => a + (c.nfByMonth?.[m] ?? 0), 0);
+            const msYear = MONTHS.reduce((a, m) => a + num(c.msByMonth?.[m]), 0);
+            const nfYear = MONTHS.reduce((a, m) => a + num(c.nfByMonth?.[m]), 0);
             const totalYear = msYear + nfYear;
 
             const expanded = isExpanded(c.id);
@@ -770,7 +879,7 @@ export default function ExternalContractorsDetails({
                                   monthDividerClass(m),
                                 ].join(" ")}
                               >
-                                {fmt((c.msByMonth?.[m] ?? 0) + (c.nfByMonth?.[m] ?? 0))}
+                                {fmt(num(c.msByMonth?.[m]) + num(c.nfByMonth?.[m]))}
                               </td>
                             ))}
                             <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-gray-900 whitespace-nowrap">
