@@ -69,6 +69,65 @@ function StatCard({ title, value, sub }) {
   );
 }
 
+function InsightCard({ title, sub, items, whyDetails }) {
+  const [showWhy, setShowWhy] = useState(false);
+
+  return (
+    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+      {/* Header row (title/sub + button) */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-extrabold text-gray-900">{title}</div>
+          {sub ? (
+            <div className="mt-0.5 text-xs font-semibold text-gray-500">
+              {sub}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="rounded-xl border bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-gray-100"
+            onClick={() => setShowWhy((v) => !v)}
+          >
+            {showWhy ? "Hide details" : "Why?"}
+          </button>
+        </div>
+      </div>
+
+      {/* Body (unchanged) */}
+      <div className="mt-2 space-y-2">
+        {(items || []).length ? (
+          items.map((t, idx) => (
+            <div key={idx} className="rounded-xl bg-gray-50 px-3 py-2 text-sm">
+              <span className="font-semibold text-gray-900">{t}</span>
+            </div>
+          ))
+        ) : (
+          <div className="text-sm font-semibold text-gray-500">
+            No significant month-over-month change detected.
+          </div>
+        )}
+
+        {/* Why details (toggle) */}
+        {showWhy && (whyDetails || []).length ? (
+          <div className="mt-3 rounded-xl border bg-white p-3">
+            <div className="text-xs font-extrabold text-gray-900">Details</div>
+            <div className="mt-2 space-y-1">
+              {whyDetails.map((t, idx) => (
+                <div key={idx} className="text-xs font-semibold text-gray-700">
+                  • {t}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /* -----------------------------
    SVG Charts (no deps)
 ------------------------------ */
@@ -1207,7 +1266,7 @@ function BudgetVarianceChart({
             Variance vs Budget (Actual vs Target)
           </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
-            Bars show Actual vs Budget • Variance & cumulative drift for CFO view
+            Bars show Actual vs Budget • Variance & cumulative drift for CIO view
           </div>
         </div>
 
@@ -1398,7 +1457,241 @@ function BudgetVarianceChart({
   );
 }
 
+function CumulativeBurnCurve({
+  monthsAll,
+  visibleMonths,
+  actualCumByMonth,
+  budgetCumByMonth,
+  height = 240,
+}) {
+  const width = 900;
+  const padL = 72;
+  const padR = 16;
+  const padT = 12;
+  const padB = 34;
 
+  const plotW = width - padL - padR;
+  const plotH = height - padT - padB;
+
+  const hasBudget = monthsAll.some((m) => Number(budgetCumByMonth?.[m] ?? 0) > 0);
+
+  const maxY = Math.max(
+    1,
+    ...monthsAll.map((m) =>
+      Math.max(
+        Number(actualCumByMonth?.[m] ?? 0),
+        Number(budgetCumByMonth?.[m] ?? 0)
+      )
+    )
+  );
+
+  function xFor(i) {
+    if (monthsAll.length <= 1) return padL;
+    return padL + (i * plotW) / (monthsAll.length - 1);
+  }
+
+  function yFor(v) {
+    return padT + plotH - (Number(v) / maxY) * plotH;
+  }
+
+  function pointsFor(map) {
+    return monthsAll
+      .map((m, i) => `${xFor(i)},${yFor(Number(map?.[m] ?? 0))}`)
+      .join(" ");
+  }
+
+  const [hover, setHover] = useState(null);
+  const containerRef = useRef(null);
+
+  function clearHover() {
+    setHover(null);
+  }
+
+  function updateHover(e, m) {
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const a = Number(actualCumByMonth?.[m] ?? 0);
+    const b = Number(budgetCumByMonth?.[m] ?? 0);
+    const v = b > 0 ? a - b : 0;
+
+    setHover({ month: m, x, y, a, b, v });
+  }
+
+  // last visible month marker
+  const lastVisible = visibleMonths?.[visibleMonths.length - 1];
+  const lastIdx = monthsAll.indexOf(lastVisible);
+
+  return (
+    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-sm font-extrabold text-gray-900">
+            Cumulative burn curve
+          </div>
+          <div className="mt-0.5 text-xs font-semibold text-gray-500">
+            Cumulative spend over time — shows pacing, acceleration, and stability
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-xs font-semibold text-gray-600">As of {lastVisible}</div>
+          <div className="text-lg font-extrabold text-gray-900">
+            {fmt(Number(actualCumByMonth?.[lastVisible] ?? 0))}
+          </div>
+          {hasBudget ? (
+            <div className="text-xs font-semibold text-gray-500">
+              Budget {fmt(Number(budgetCumByMonth?.[lastVisible] ?? 0))} •
+              Variance {fmt(Number(actualCumByMonth?.[lastVisible] ?? 0) - Number(budgetCumByMonth?.[lastVisible] ?? 0))}
+            </div>
+          ) : (
+            <div className="text-xs font-semibold text-gray-500">
+              Budget not set (optional)
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div
+        ref={containerRef}
+        className="relative mt-3 overflow-x-auto"
+        onMouseLeave={clearHover}
+      >
+        {hover ? (
+          <div
+            className="pointer-events-none absolute z-10 w-80 rounded-xl border bg-white p-3 text-xs shadow-lg"
+            style={{
+              left: Math.min(
+                Math.max(8, hover.x + 12),
+                (containerRef.current?.clientWidth || 0) - 328
+              ),
+              top: Math.max(8, hover.y + 12),
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="font-extrabold text-gray-900">{hover.month}</div>
+              <div className="font-extrabold text-gray-900">{fmt(hover.a)}</div>
+            </div>
+
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-700">Cumulative actual</span>
+                <span className="font-extrabold text-gray-900">{fmt(hover.a)}</span>
+              </div>
+
+              {hasBudget ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-700">Cumulative budget</span>
+                    <span className="font-extrabold text-gray-900">{fmt(hover.b)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-700">Variance</span>
+                    <span className="font-extrabold text-gray-900">
+                      {fmt(hover.v)}
+                    </span>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="mt-2 border-t pt-2 text-[11px] font-semibold text-gray-500">
+              Hover points to inspect cumulative burn
+            </div>
+          </div>
+        ) : null}
+
+        <svg width={width} height={height} className="min-w-[900px]">
+          {[0, 0.5, 1].map((t) => {
+            const v = maxY * t;
+            const y = yFor(v);
+            return (
+              <g key={t}>
+                <line x1={padL} x2={width - padR} y1={y} y2={y} stroke="#EEF2F7" />
+                <text x={8} y={y + 4} fontSize="10" fill="#6B7280">
+                  {fmt(v)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* actual cumulative */}
+          <polyline
+            points={pointsFor(actualCumByMonth)}
+            fill="none"
+            stroke="#111827"
+            strokeWidth="2.75"
+          />
+
+          {/* budget cumulative (optional) */}
+          {hasBudget ? (
+            <polyline
+              points={pointsFor(budgetCumByMonth)}
+              fill="none"
+              stroke="#9CA3AF"
+              strokeWidth="2.5"
+              strokeDasharray="6 6"
+            />
+          ) : null}
+
+          {/* last visible marker */}
+          {lastIdx >= 0 ? (
+            <line
+              x1={xFor(lastIdx)}
+              x2={xFor(lastIdx)}
+              y1={padT}
+              y2={padT + plotH}
+              stroke="#E5E7EB"
+            />
+          ) : null}
+
+          {monthsAll.map((m, i) => {
+            const x = xFor(i);
+            const yA = yFor(Number(actualCumByMonth?.[m] ?? 0));
+            const yB = yFor(Number(budgetCumByMonth?.[m] ?? 0));
+            return (
+              <g
+                key={m}
+                onMouseEnter={(e) => updateHover(e, m)}
+                onMouseMove={(e) => updateHover(e, m)}
+              >
+                <circle cx={x} cy={yA} r="3.2" fill="#111827" />
+                {hasBudget ? <circle cx={x} cy={yB} r="3.2" fill="#9CA3AF" /> : null}
+
+                <text
+                  x={x}
+                  y={height - 12}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill="#6B7280"
+                >
+                  {m}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs font-semibold text-gray-600">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-3 w-3 rounded bg-gray-900" />
+          <span>Cumulative actual</span>
+        </div>
+        {hasBudget ? (
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded bg-gray-400" />
+            <span>Cumulative budget</span>
+          </div>
+        ) : null}
+        <div className="text-gray-500">Vertical line = last selected month</div>
+      </div>
+    </div>
+  );
+}
 
 /* -----------------------------
    Main Page
@@ -1624,6 +1917,127 @@ export default function TrendsPage({ selectedProgram, onProgramChange, onBack })
     ];
   }, [contractorsRoll, sowRoll, tnsRoll]);
 
+  
+  
+  // What changed this month? (auto insight)
+  const whatChanged = useMemo(() => {
+    // helper: safe delta within visibleMonths
+    function deltaFor(map, prevM, curM) {
+      return Number(map?.[curM] ?? 0) - Number(map?.[prevM] ?? 0);
+    }
+
+    const months = Array.isArray(visibleMonths) ? visibleMonths : [];
+    if (months.length < 2) return { focusMonth: null, insights: [] };
+
+    // Build per-month totals for each contributor bucket we can attribute:
+    // - Tools & Services: MS / NF
+    // - External Contractors: MS / NF
+    // - External SOW: MS / NF
+    const buckets = [
+      {
+        key: "tns_nf",
+        label: "Tools & Services (NF)",
+        map: Object.fromEntries(MONTHS.map((m) => [m, Number(tnsRoll.nf?.[m] ?? 0)])),
+      },
+      {
+        key: "tns_ms",
+        label: "Tools & Services (MS)",
+        map: Object.fromEntries(MONTHS.map((m) => [m, Number(tnsRoll.ms?.[m] ?? 0)])),
+      },
+      {
+        key: "contractors_nf",
+        label: "External Contractors (NF)",
+        map: Object.fromEntries(MONTHS.map((m) => [m, Number(contractorsRoll.nf?.[m] ?? 0)])),
+      },
+      {
+        key: "contractors_ms",
+        label: "External Contractors (MS)",
+        map: Object.fromEntries(MONTHS.map((m) => [m, Number(contractorsRoll.ms?.[m] ?? 0)])),
+      },
+      {
+        key: "sow_nf",
+        label: "External SOW (NF)",
+        map: Object.fromEntries(MONTHS.map((m) => [m, Number(sowRoll.nf?.[m] ?? 0)])),
+      },
+      {
+        key: "sow_ms",
+        label: "External SOW (MS)",
+        map: Object.fromEntries(MONTHS.map((m) => [m, Number(sowRoll.ms?.[m] ?? 0)])),
+      },
+    ];
+
+    // Compute overall month-to-month delta to find "focus month"
+    // We'll pick the month with the largest absolute delta in total spend (within visible range).
+    let best = null; // { month, prev, delta }
+    for (let i = 1; i < months.length; i++) {
+      const prevM = months[i - 1];
+      const curM = months[i];
+      const d = Number(byMonth?.[curM]?.total ?? 0) - Number(byMonth?.[prevM]?.total ?? 0);
+
+      if (!best || Math.abs(d) > Math.abs(best.delta)) {
+        best = { month: curM, prev: prevM, delta: d };
+      }
+    }
+
+    if (!best) return { focusMonth: null, insights: [] };
+
+    const { month: focusMonth, prev: prevMonth, delta: totalDelta } = best;
+
+    // Rank contributing bucket deltas for the focus month
+    const ranked = buckets
+      .map((b) => ({
+        label: b.label,
+        delta: deltaFor(b.map, prevMonth, focusMonth),
+      }))
+      .filter((r) => r.delta !== 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+    // If total delta is tiny, don't show noise.
+    // Threshold = 3% of current month total OR $1k, whichever is higher.
+    const curTotal = Number(byMonth?.[focusMonth]?.total ?? 0);
+    const minAbs = Math.max(1000, curTotal * 0.03);
+
+    if (Math.abs(totalDelta) < minAbs) {
+      return { focusMonth, insights: [] };
+    }
+
+    // Build top 1–2 insights
+    const top = ranked.slice(0, 2);
+
+    function signedMoney(v) {
+      const n = Number(v ?? 0);
+      if (n > 0) return `+${fmt(n)}`;
+      if (n < 0) return `-${fmt(Math.abs(n))}`;
+      return fmt(0);
+    }
+
+    const verb = totalDelta >= 0 ? "spike" : "drop";
+    const headline = `${focusMonth} ${verb} driven by ${signedMoney(top[0]?.delta)} change in ${top[0]?.label}.`;
+
+    const extra =
+      top.length > 1
+        ? `Secondary driver: ${signedMoney(top[1]?.delta)} change in ${top[1]?.label}.`
+        : null;
+
+    return {
+        focusMonth,
+        prevMonth,
+        totalDelta,
+        insights: extra ? [headline, extra] : [headline],
+        whyDetails: [
+            `Selected range: ${months[0]}–${months[months.length - 1]}`,
+            `Focus month = largest absolute MoM change within selected range.`,
+            `Δ Total (${prevMonth} → ${focusMonth}): ${signedMoney(totalDelta)}`,
+            `Top driver: ${top[0]?.label} (${signedMoney(top[0]?.delta)})`,
+            ...(top.length > 1
+            ? [`Secondary driver: ${top[1]?.label} (${signedMoney(top[1]?.delta)})`]
+            : []),
+            `Noise filter: max($1,000, 3% of ${focusMonth} total).`,
+        ],
+    };
+  }, [visibleMonths, byMonth, contractorsRoll, sowRoll, tnsRoll]);
+  
+
   // Line chart (MS vs NF)
   const msByMonth = useMemo(
     () => Object.fromEntries(MONTHS.map((m) => [m, byMonth[m].ms])),
@@ -1685,7 +2099,28 @@ export default function TrendsPage({ selectedProgram, onProgramChange, onBack })
     };
   }, [byMonth, snapshot.budgetByMonth, visibleMonths]);
 
-    // Spend momentum (Δ month-over-month)
+  // Cumulative burn curve (actual + optional budget)
+  const burnCurve = useMemo(() => {
+    const actualCum = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+    const budgetCum = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+
+    let a = 0;
+    let b = 0;
+
+    for (const m of MONTHS) {
+      a += Number(byMonth?.[m]?.total ?? 0);
+      actualCum[m] = a;
+
+      // budget is optional; if not set, it stays 0
+      b += Number(snapshot.budgetByMonth?.[m] ?? 0);
+      budgetCum[m] = b;
+    }
+
+    return { actualCum, budgetCum };
+  }, [byMonth, snapshot.budgetByMonth]);
+  
+  
+  // Spend momentum (Δ month-over-month)
   // IMPORTANT: compute across ALL MONTHS so the first visible month can still compare to its real previous month.
   const spendDelta = useMemo(() => {
     const dTotal = Object.fromEntries(MONTHS.map((m) => [m, 0]));
@@ -1945,7 +2380,75 @@ export default function TrendsPage({ selectedProgram, onProgramChange, onBack })
           </div>
         </div>
 
-        {/* Budget (optional) */}
+
+        {/* KPI cards */}
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Total spend (selected months)"
+            value={fmt(sums.grandTotal)}
+            sub={`${visibleMonths.length} months • Run rate ${fmt(
+              sums.runRate
+            )}/mo`}
+          />
+          <StatCard
+            title="MS vs NF split"
+            value={`${pct(msShare)} MS • ${pct(nfShare)} NF`}
+            sub={`${fmt(sums.msTotal)} MS • ${fmt(sums.nfTotal)} NF`}
+          />
+          {/* External vs Tools & Services card removed per request */}
+          <StatCard
+            title="Internal (FTE entries)"
+            value={`${internalFteCount}`}
+            sub="Live count from Internal Labor items"
+          />
+        </div>
+
+        {/* What changed this month? */}
+        <div className="mt-6">
+          <InsightCard
+            title="Biggest spike/drop in selected range"
+            sub={viewLabel}   // this already changes with your slider
+            items={whatChanged.insights}
+            whyDetails={whatChanged.whyDetails}
+          />
+        </div>
+
+        {/* Run rate forecast projection (year-end) */}
+        <div className="mt-6">
+          <RunRateProjectionChart
+            monthsAll={MONTHS}
+            visibleMonths={visibleMonths}
+            actualCumByMonth={runRateProjection.actualCum}
+            projCumByMonth={runRateProjection.projCum}
+            lowCumByMonth={runRateProjection.lowCum}
+            highCumByMonth={runRateProjection.highCum}
+            yearEnd={runRateProjection.yearEnd}
+          />
+        </div>
+
+        {/* Spend acceleration (Δ MoM) */}
+        <div className="mt-6">
+          <SpendMomentumChart
+            months={visibleMonths}
+            dTotalByMonth={spendDelta.dTotal}
+            dMsByMonth={spendDelta.dMs}
+            dNfByMonth={spendDelta.dNf}
+          />
+        </div>
+
+        {/* Variance vs Budget */}
+        <div className="mt-6">
+          <BudgetVarianceChart
+            months={visibleMonths}
+            actualByMonth={variance.actual}
+            budgetByMonth={variance.budget}
+            diffByMonth={variance.diff}
+            cumDiffByMonth={variance.cumDiff}
+            selected={variance.selected}
+          />
+        </div>
+
+         {/* Budget (optional) */}
         <div className="mt-5 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -2009,61 +2512,14 @@ export default function TrendsPage({ selectedProgram, onProgramChange, onBack })
           </div>
         </div>
 
-
-        {/* KPI cards */}
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            title="Total spend (selected months)"
-            value={fmt(sums.grandTotal)}
-            sub={`${visibleMonths.length} months • Run rate ${fmt(
-              sums.runRate
-            )}/mo`}
-          />
-          <StatCard
-            title="MS vs NF split"
-            value={`${pct(msShare)} MS • ${pct(nfShare)} NF`}
-            sub={`${fmt(sums.msTotal)} MS • ${fmt(sums.nfTotal)} NF`}
-          />
-          {/* External vs Tools & Services card removed per request */}
-          <StatCard
-            title="Internal (FTE entries)"
-            value={`${internalFteCount}`}
-            sub="Live count from Internal Labor items"
-          />
-        </div>
-
-        {/* Run rate forecast projection (year-end) */}
+        
+        {/* Cumulative burn curve (bottom) */}
         <div className="mt-6">
-          <RunRateProjectionChart
+          <CumulativeBurnCurve
             monthsAll={MONTHS}
             visibleMonths={visibleMonths}
-            actualCumByMonth={runRateProjection.actualCum}
-            projCumByMonth={runRateProjection.projCum}
-            lowCumByMonth={runRateProjection.lowCum}
-            highCumByMonth={runRateProjection.highCum}
-            yearEnd={runRateProjection.yearEnd}
-          />
-        </div>
-
-        {/* Spend acceleration (Δ MoM) */}
-        <div className="mt-6">
-          <SpendMomentumChart
-            months={visibleMonths}
-            dTotalByMonth={spendDelta.dTotal}
-            dMsByMonth={spendDelta.dMs}
-            dNfByMonth={spendDelta.dNf}
-          />
-        </div>
-
-        {/* Variance vs Budget */}
-        <div className="mt-6">
-          <BudgetVarianceChart
-            months={visibleMonths}
-            actualByMonth={variance.actual}
-            budgetByMonth={variance.budget}
-            diffByMonth={variance.diff}
-            cumDiffByMonth={variance.cumDiff}
-            selected={variance.selected}
+            actualCumByMonth={burnCurve.actualCum}
+            budgetCumByMonth={burnCurve.budgetCum}
           />
         </div>
 
