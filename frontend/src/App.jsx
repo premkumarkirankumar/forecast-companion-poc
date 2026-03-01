@@ -7,6 +7,7 @@ import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
 import TrendsPage from "./components/forecast/TrendsPage";
 import DataManagementPage from "./components/forecast/DataManagementPage";
+import ExecutiveOverview from "./components/forecast/ExecutiveOverview";
 import AuthBar from "./components/AuthBar";
 import AssistantDrawer from "./components/ai/AssistantDrawer";
 import { auth, googleProvider } from "./firebase";
@@ -51,7 +52,7 @@ const seedTns = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState("dashboard"); // dashboard | changelog | trends | data
+  const [page, setPage] = useState("dashboard"); // dashboard | executive | changelog | trends | data
   const [user, setUser] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [entryMode, setEntryMode] = useState(() => {
@@ -92,6 +93,7 @@ export default function App() {
   useEffect(() => {
     if (user && entryMode === "local") {
       setEntryMode("google");
+      setPage("executive");
     }
   }, [user, entryMode]);
 
@@ -174,6 +176,7 @@ export default function App() {
   async function handleGoogleEntry() {
     if (user) {
       setEntryMode("google");
+      setPage("executive");
       return;
     }
 
@@ -181,6 +184,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
       setEntryMode("google");
+      setPage("executive");
     } catch (e) {
       console.error("Google sign-in failed:", e);
       alert(e?.message || "Sign-in failed");
@@ -192,6 +196,11 @@ export default function App() {
   function returnToEntry() {
     setPage("dashboard");
     setEntryMode(null);
+  }
+
+  function handleAuthEntry() {
+    setEntryMode("google");
+    setPage("executive");
   }
 
   if (!entryMode) {
@@ -314,6 +323,16 @@ export default function App() {
     );
   }
 
+  if (page === "executive") {
+    return (
+      <ExecutiveOverview
+        selectedProgram={selectedProgram}
+        onSelectProgram={setSelectedProgram}
+        onContinue={() => setPage("dashboard")}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar */}
@@ -329,6 +348,13 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage("executive")}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+            >
+              Executive Summary
+            </button>
+
             <button
               onClick={() => setPage("data")}
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
@@ -364,8 +390,7 @@ export default function App() {
               Entry Options
             </button>
 
-            <AssistantDrawer programId={selectedProgram} />
-            <AuthBar onSignedOut={returnToEntry} />
+            <AuthBar onSignedIn={handleAuthEntry} onSignedOut={returnToEntry} />
           </div>
         </div>
       </div>

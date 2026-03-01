@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 
-export default function AuthBar({ onSignedOut }) {
+export default function AuthBar({ onSignedIn, onSignedOut }) {
   const [user, setUser] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -15,6 +15,7 @@ export default function AuthBar({ onSignedOut }) {
     setBusy(true);
     try {
       await signInWithPopup(auth, googleProvider);
+      onSignedIn?.();
     } catch (e) {
       console.error("Google sign-in failed:", e);
       alert(e?.message || "Sign-in failed");
