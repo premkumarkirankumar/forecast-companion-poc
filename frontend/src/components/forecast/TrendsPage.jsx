@@ -1,6 +1,6 @@
 // frontend/src/components/forecast/TrendsPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadProgramState } from "../../data/firestorePrograms";
+import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
 import { MONTHS } from "../../data/hub";
 import { fmt } from "../../lib/forecast/format";
 
@@ -202,7 +202,7 @@ function StackedBars({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-extrabold text-gray-900">
-            Monthly total spend (stacked)
+            Monthly tracked spend
           </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
             External Contractors + External SOW + Tools & Services
@@ -998,7 +998,7 @@ function RunRateProjectionChart({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-sm font-extrabold text-gray-900">
-            Run rate forecast projection (year-end)
+            Tracked spend projection (year-end)
           </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
             Projection based on the last 3 months trend • Band ±5%
@@ -1007,7 +1007,7 @@ function RunRateProjectionChart({
 
         <div className="text-right">
           <div className="text-xs font-semibold text-gray-600">
-            Projected year-end
+            Projected tracked spend
           </div>
           <div className="text-lg font-extrabold text-gray-900">
             {fmt(yearEnd?.projected ?? 0)}
@@ -1895,9 +1895,17 @@ export default function TrendsPage({
     setBudgetDraft(snapshot.budgetByMonth);
   }, [snapshot.budgetByMonth]);
 
-  function saveBudget(nextMap) {
+  async function saveBudget(nextMap) {
     localStorage.setItem(budgetKey, JSON.stringify(nextMap));
     window.dispatchEvent(new Event("pfc:storage"));
+
+    if (entryMode === "local") return;
+
+    try {
+      await saveProgramState(programKey, { budgetByMonth: nextMap });
+    } catch (e) {
+      console.error("Failed to save budget:", e);
+    }
   }
 
   function setBudgetForMonth(m, value) {
@@ -2431,7 +2439,7 @@ export default function TrendsPage({
         {/* KPI cards */}
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Total spend (selected months)"
+            title="Tracked spend (selected months)"
             value={fmt(sums.grandTotal)}
             sub={`${visibleMonths.length} months • Run rate ${fmt(
               sums.runRate

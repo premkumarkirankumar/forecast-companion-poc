@@ -50,6 +50,34 @@ function countItems(v: unknown): number {
 }
 
 /**
+ * Safely sums MS + NF values across all months for an item array.
+ * @param {unknown} v - input array
+ * @return {number} total amount
+ */
+function sumItems(v: unknown): number {
+  const items = asArray(v) as Array<Record<string, unknown>>;
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+
+  return items.reduce((total, item) => {
+    const msByMonth = (item?.msByMonth ?? {}) as Record<string, unknown>;
+    const nfByMonth = (item?.nfByMonth ?? {}) as Record<string, unknown>;
+
+    const itemTotal = months.reduce((acc, month) => {
+      return (
+        acc +
+        Number(msByMonth?.[month] ?? 0) +
+        Number(nfByMonth?.[month] ?? 0)
+      );
+    }, 0);
+
+    return total + itemTotal;
+  }, 0);
+}
+
+/**
  * Safely loads program state from Firestore doc: programs/{programId}.
  * If not found or if any error occurs, returns null (non-breaking).
  * @param {string} programId - connected | tre | csc | default
@@ -208,21 +236,45 @@ export const assistant = onRequest(
       "3. Do NOT use *, -, or numbered lists.",
       "4. Use short executive-style explanations.",
       "Tone: Professional, concise, executive summary style.",
+      "Terminology: MS means Maintenance.",
+      "Terminology: NF means New Feature.",
+      "If the user says MF, interpret it as NF (New Feature).",
+      "Tracked spend means Tools & Services plus External costs only.",
+      "Internal is represented as FTE capacity, not internal labor cost.",
+      "When answering leadership-style questions, lead with the takeaway, then the supporting numbers.",
     ];
 
     if (state) {
+      const tnsItemsArr = asArray(state.tnsItems);
+      const contractorsArr = asArray(state.contractors);
+      const sowsArr = asArray(state.sows);
+      const internalLaborArr = asArray(state.internalLaborItems);
+      const toolsTotal = sumItems(tnsItemsArr);
+      const contractorTotal = sumItems(contractorsArr);
+      const sowTotal = sumItems(sowsArr);
+      const trackedSpendTotal = toolsTotal + contractorTotal + sowTotal;
+
       const countsLine =
         "Counts: " +
-        `tnsItems=${countItems(asArray(state.tnsItems))}, ` +
-        `contractors=${countItems(asArray(state.contractors))}, ` +
-        `sows=${countItems(asArray(state.sows))}, ` +
+        `tnsItems=${countItems(tnsItemsArr)}, ` +
+        `contractors=${countItems(contractorsArr)}, ` +
+        `sows=${countItems(sowsArr)}, ` +
         "internalLaborItems=" +
-        `${countItems(asArray(state.internalLaborItems))}`;
+        `${countItems(internalLaborArr)}`;
+
+      const totalsLine =
+        "Executive summary: " +
+        `trackedSpend=${trackedSpendTotal}, ` +
+        `toolsAndServices=${toolsTotal}, ` +
+        `contractors=${contractorTotal}, ` +
+        `sows=${sowTotal}, ` +
+        `internalFteCount=${countItems(internalLaborArr)}`;
 
       promptLines.push("");
       promptLines.push("Firestore state loaded: YES");
       promptLines.push(`State keys: ${keys.join(", ")}`);
       promptLines.push(countsLine);
+      promptLines.push(totalsLine);
 
       const stateJson = JSON.stringify(state);
       promptLines.push("");

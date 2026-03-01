@@ -8,6 +8,14 @@ export default function AssistantDrawer({ open, onClose, programId }) {
   const [messages, setMessages] = useState([]); // {role:'user'|'ai', text}
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
+  const quickPrompts = [
+    "Give me a concise summary of this program's tracked spend.",
+    "Summarize the delivery risks in this forecast.",
+    "How does Maintenance vs New Feature mix look in this program?",
+    "What changed recently in Tools & Services and why does it matter?",
+    "What is the most important shift leadership should know right now?",
+    "Which area needs attention first based on the current forecast?",
+  ];
 
   useEffect(() => {
     if (open) {
@@ -77,6 +85,9 @@ export default function AssistantDrawer({ open, onClose, programId }) {
             <div className="text-xs text-gray-600">
               Program: <span className="font-semibold">{programId}</span>
             </div>
+            <div className="mt-1 text-[11px] text-gray-500">
+              MS = Maintenance • NF = New Feature
+            </div>
           </div>
 
           <button
@@ -92,14 +103,10 @@ export default function AssistantDrawer({ open, onClose, programId }) {
           <div className="flex-1 overflow-auto px-4 py-4">
             {messages.length === 0 ? (
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-                Ask questions like:
-              
+                Ask for summaries, risk signals, and decision-ready takeaways:
+
               <div className="mt-2 space-y-2 text-xs">
-                {[
-                    "What are the totals for MS vs NF?",
-                    "Summarize external contractors for this program.",
-                    "What changed recently in Tools & Services?",
-                ].map((q) => (
+                {quickPrompts.map((q) => (
                     <button
                     key={q}
                     type="button"
@@ -140,7 +147,7 @@ export default function AssistantDrawer({ open, onClose, programId }) {
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={onKeyDown}
                 rows={2}
-                placeholder="Ask something about the forecast data…"
+                placeholder="Ask for a summary, risk callout, or change explanation…"
                 className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
               />
 

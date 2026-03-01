@@ -1,6 +1,7 @@
 // frontend/src/data/firestorePrograms.js
 import { db } from "../firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { MONTHS } from "./hub";
 
 // TrendsPage reads these localStorage keys today.
 // We mirror Firestore program state into these keys to keep Trends working unchanged.
@@ -8,12 +9,21 @@ function mirrorToLocalStorage(programId, state) {
   if (!programId || !state) return;
 
   const safeArray = (v) => (Array.isArray(v) ? v : []);
+  const safeBudgetMap = (v) => {
+    const fallback = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+    if (!v || typeof v !== "object") return fallback;
+
+    const out = { ...fallback };
+    for (const m of MONTHS) out[m] = Number(v?.[m] ?? 0);
+    return out;
+  };
 
   const mappings = [
     [`pfc.${programId}.internal.labor.items`, safeArray(state.internalLaborItems)],
     [`pfc.${programId}.external.contractors`, safeArray(state.contractors)],
     [`pfc.${programId}.external.sow`, safeArray(state.sows)],
     [`pfc.${programId}.tns.items`, safeArray(state.tnsItems)],
+    [`pfc.${programId}.budget.byMonth`, safeBudgetMap(state.budgetByMonth)],
   ];
 
   for (const [key, value] of mappings) {
@@ -52,16 +62,19 @@ export async function loadProgramState(programId) {
  */
 export async function saveProgramState(programId, state) {
   const ref = doc(db, "programs", programId);
+  const existingSnap = await getDoc(ref);
+  const existingState = existingSnap.exists() ? existingSnap.data()?.state ?? {} : {};
+  const mergedState = { ...existingState, ...(state || {}) };
 
   await setDoc(
     ref,
     {
       updatedAt: serverTimestamp(),
-      state,
+      state: mergedState,
     },
     { merge: true }
   );
 
   // ✅ Mirror after save too (helps Trends update immediately)
-  mirrorToLocalStorage(programId, state);
+  mirrorToLocalStorage(programId, mergedState);
 }

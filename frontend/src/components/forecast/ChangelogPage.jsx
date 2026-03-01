@@ -2,11 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { addChangeLogEntry, clearChangeLog, loadChangeLog } from "./changeLogStore";
 import { clearAutoLog, loadAutoLog } from "./autoLogStore";
 
+const PASSWORD_KEY = "pfc.changelog.password.v1";
+
 function fmtTs(iso) {
   try {
     return new Date(iso).toLocaleString();
   } catch {
     return iso;
+  }
+}
+
+function readStoredPassword() {
+  try {
+    return localStorage.getItem(PASSWORD_KEY) || "";
+  } catch {
+    return "";
   }
 }
 
@@ -130,8 +140,16 @@ export default function ChangeLogPage({ onBack }) {
   const [author, setAuthor] = useState("");
   const [area, setArea] = useState("General");
   const [message, setMessage] = useState("");
+  const [storedPassword, setStoredPassword] = useState(() => readStoredPassword());
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [unlockInput, setUnlockInput] = useState("");
+  const [isUnlocked, setIsUnlocked] = useState(() => !readStoredPassword());
+  const [securityMessage, setSecurityMessage] = useState("");
 
-  const canAdd = useMemo(() => author.trim() && message.trim(), [author, message]);
+  const canAdd = useMemo(
+    () => author.trim() && message.trim() && (!storedPassword || isUnlocked),
+    [author, message, storedPassword, isUnlocked]
+  );
 
   // Keep both sections live if other pages write logs while this is open
   useEffect(() => {
@@ -162,11 +180,69 @@ export default function ChangeLogPage({ onBack }) {
   }
 
   function onClear() {
+    if (storedPassword && !isUnlocked) return;
+
     const ok = confirm("Clear ALL logs (Manual + Auto)? This cannot be undone.");
     if (!ok) return;
 
     setEntries(clearChangeLog());
     setAutoEntries(clearAutoLog());
+  }
+
+  function savePassword(nextPassword) {
+    try {
+      if (!nextPassword) {
+        localStorage.removeItem(PASSWORD_KEY);
+      } else {
+        localStorage.setItem(PASSWORD_KEY, nextPassword);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function onSetPassword() {
+    const next = passwordDraft.trim();
+    if (!next) return;
+
+    savePassword(next);
+    setStoredPassword(next);
+    setIsUnlocked(true);
+    setPasswordDraft("");
+    setUnlockInput("");
+    setSecurityMessage("Change log password set. Manual entries are unlocked on this device.");
+  }
+
+  function onUnlock() {
+    if (!storedPassword) {
+      setIsUnlocked(true);
+      return;
+    }
+
+    if (unlockInput === storedPassword) {
+      setIsUnlocked(true);
+      setUnlockInput("");
+      setSecurityMessage("Change log unlocked.");
+      return;
+    }
+
+    setSecurityMessage("Incorrect password.");
+  }
+
+  function onLock() {
+    if (!storedPassword) return;
+    setIsUnlocked(false);
+    setUnlockInput("");
+    setSecurityMessage("Change log locked.");
+  }
+
+  function onRemovePassword() {
+    savePassword("");
+    setStoredPassword("");
+    setPasswordDraft("");
+    setUnlockInput("");
+    setIsUnlocked(true);
+    setSecurityMessage("Password protection removed.");
   }
 
   return (
@@ -180,13 +256,122 @@ export default function ChangeLogPage({ onBack }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={onClear} className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50">
+          <button
+            onClick={onClear}
+            disabled={storedPassword && !isUnlocked}
+            className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+          >
             Clear Log
           </button>
           <button onClick={onBack} className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50">
             Back
           </button>
         </div>
+      </div>
+
+      <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold text-gray-900">Change Log Protection</div>
+            <div className="mt-1 text-sm text-gray-500">
+              Set a password to protect manual change-log edits and log clearing on this device.
+            </div>
+          </div>
+          {storedPassword ? (
+            <span
+              className={[
+                "rounded-full px-3 py-1 text-xs font-semibold",
+                isUnlocked
+                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                  : "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+              ].join(" ")}
+            >
+              {isUnlocked ? "Unlocked" : "Locked"}
+            </span>
+          ) : (
+            <span className="rounded-full bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+              No password set
+            </span>
+          )}
+        </div>
+
+        {!storedPassword ? (
+          <div className="mt-4 flex flex-col gap-3 md:flex-row">
+            <input
+              type="password"
+              value={passwordDraft}
+              onChange={(e) => setPasswordDraft(e.target.value)}
+              placeholder="Set a password"
+              className="w-full rounded-xl border px-3 py-2"
+            />
+            <button
+              type="button"
+              onClick={onSetPassword}
+              disabled={!passwordDraft.trim()}
+              className="rounded-xl border bg-black px-4 py-2 font-semibold text-white disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              Set Password
+            </button>
+          </div>
+        ) : !isUnlocked ? (
+          <div className="mt-4 flex flex-col gap-3 md:flex-row">
+            <input
+              type="password"
+              value={unlockInput}
+              onChange={(e) => setUnlockInput(e.target.value)}
+              placeholder="Enter password to unlock"
+              className="w-full rounded-xl border px-3 py-2"
+            />
+            <button
+              type="button"
+              onClick={onUnlock}
+              disabled={!unlockInput}
+              className="rounded-xl border bg-black px-4 py-2 font-semibold text-white disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              Unlock
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-3 md:flex-row">
+              <input
+                type="password"
+                value={passwordDraft}
+                onChange={(e) => setPasswordDraft(e.target.value)}
+                placeholder="Enter a new password to change it"
+                className="w-full rounded-xl border px-3 py-2"
+              />
+              <button
+                type="button"
+                onClick={onSetPassword}
+                disabled={!passwordDraft.trim()}
+                className="rounded-xl border bg-black px-4 py-2 font-semibold text-white disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                Update Password
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={onLock}
+                className="rounded-xl border bg-white px-4 py-2 font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Lock
+              </button>
+              <button
+                type="button"
+                onClick={onRemovePassword}
+                className="rounded-xl border bg-white px-4 py-2 font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Remove Password
+              </button>
+            </div>
+          </div>
+        )}
+
+        {securityMessage ? (
+          <div className="mt-3 text-xs font-semibold text-gray-500">{securityMessage}</div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 mb-6">
@@ -227,8 +412,9 @@ export default function ChangeLogPage({ onBack }) {
             <input
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
+              disabled={Boolean(storedPassword) && !isUnlocked}
               placeholder="Enter your name (required)"
-              className="w-full px-3 py-2 rounded-xl border"
+              className="w-full px-3 py-2 rounded-xl border disabled:bg-gray-50 disabled:text-gray-400"
             />
           </div>
 
@@ -237,7 +423,8 @@ export default function ChangeLogPage({ onBack }) {
             <select
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border bg-white"
+              disabled={Boolean(storedPassword) && !isUnlocked}
+              className="w-full px-3 py-2 rounded-xl border bg-white disabled:bg-gray-50 disabled:text-gray-400"
             >
               <option>General</option>
               <option>Internal</option>
@@ -267,9 +454,16 @@ export default function ChangeLogPage({ onBack }) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Example: Updated Tools & Services expanded layout to match SOW structure"
-            className="w-full px-3 py-2 rounded-xl border min-h-[90px]"
+            disabled={Boolean(storedPassword) && !isUnlocked}
+            className="w-full px-3 py-2 rounded-xl border min-h-[90px] disabled:bg-gray-50 disabled:text-gray-400"
           />
         </div>
+
+        {storedPassword && !isUnlocked ? (
+          <div className="mt-3 text-xs font-semibold text-amber-700">
+            Unlock the change log to add or clear entries.
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-3xl border border-gray-200 bg-white overflow-hidden shadow-sm">

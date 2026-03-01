@@ -3,6 +3,9 @@ import ImportExcelModal from "./ImportExcelModal";
 import { downloadForecastTemplate } from "../../utils/excel/downloadForecastTemplate";
 import { exportForecastWorkbook } from "../../utils/excel/exportWorkbook";
 import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
+import { MONTHS } from "../../data/hub";
+
+const PROGRAM_KEYS = ["connected", "tre", "csc"];
 
 // NOTE: We are intentionally reusing the SAME behavior you already use.
 // No changes to your existing logic; just placing it on another page.
@@ -19,10 +22,38 @@ function adaptImportedProgramToState(p) {
 
 export default function DataManagementPage({ onBack }) {
   const [importOpen, setImportOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
+  async function clearAllData() {
+    const ok = confirm(
+      "Are you sure you want to clear all saved forecast data for Connected, TRE, and CSC? This will remove Internal, Tools & Services, External, and budget data."
+    );
+    if (!ok) return;
+
+    const emptyBudgetByMonth = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+
+    try {
+      setIsClearing(true);
+
+      for (const pk of PROGRAM_KEYS) {
+        await saveProgramState(pk, {
+          internalLaborItems: [],
+          tnsItems: [],
+          contractors: [],
+          sows: [],
+          externalChangeLog: [],
+          tnsChangeLog: [],
+          budgetByMonth: emptyBudgetByMonth,
+        });
+      }
+    } finally {
+      setIsClearing(false);
+    }
+  }
 
   return (
     <div className="px-6 py-10">
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="mx-auto w-full max-w-4xl">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-2xl font-extrabold text-gray-900">
@@ -61,7 +92,7 @@ export default function DataManagementPage({ onBack }) {
             type="button"
             onClick={async () => {
               const all = {};
-              for (const pk of ["connected", "tre", "csc"]) {
+              for (const pk of PROGRAM_KEYS) {
                 all[pk] = (await loadProgramState(pk)) || {};
               }
               exportForecastWorkbook(all, { fileName: "forecast-export.xlsx" });
@@ -89,6 +120,32 @@ export default function DataManagementPage({ onBack }) {
             </div>
           </button>
         </div>
+
+        <div className="mt-6 rounded-3xl border border-rose-200 bg-[linear-gradient(135deg,_rgba(255,241,242,0.95),_rgba(255,255,255,0.98))] p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <div className="text-lg font-extrabold text-rose-900">
+                Reset Workspace Data
+              </div>
+              <div className="mt-1 text-sm font-semibold text-rose-900/80">
+                Clears saved Internal, Tools & Services, External, and budget data for Connected,
+                TRE, and CSC in one step.
+              </div>
+              <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-rose-700/80">
+                Uses a browser confirmation before proceeding
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={clearAllData}
+              disabled={isClearing}
+              className="rounded-2xl border border-rose-300 bg-white px-5 py-3 text-sm font-extrabold text-rose-900 shadow-sm transition hover:bg-rose-50 disabled:bg-rose-100/70 disabled:text-rose-500"
+            >
+              {isClearing ? "Clearing Data..." : "Clear All Data"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Import modal (same as before) */}
@@ -104,7 +161,7 @@ export default function DataManagementPage({ onBack }) {
           // For this page, we directly save payload into Firestore program docs.
           // This mirrors the effect you already have after import.
 
-          for (const pk of ["connected", "tre", "csc"]) {
+          for (const pk of PROGRAM_KEYS) {
             const p = programs?.[pk];
             if (!p) continue;
 

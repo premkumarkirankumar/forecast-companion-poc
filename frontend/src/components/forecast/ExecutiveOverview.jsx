@@ -221,7 +221,7 @@ export default function ExecutiveOverview({
 
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricTile
-              label="Portfolio Forecast"
+              label="Tracked Spend Forecast"
               value={loading ? "Loading..." : fmtCurrency(portfolio.totalForecast)}
               sub={
                 <span className="block">
