@@ -17,40 +17,45 @@ export default function AssistantDrawer({ open, onClose, programId }) {
 
   if (!open) return null;
 
-  async function ask() {
-    const q = question.trim();
-    if (!q || loading) return;
+  async function ask(qOverride) {
+  const q = (qOverride ?? question).trim();
+  if (!q || loading) return;
 
-    setMessages((m) => [...m, { role: "user", text: q }]);
-    setQuestion("");
-    setLoading(true);
+  setMessages((m) => [...m, { role: "user", text: q }]);
+  setQuestion("");
+  setLoading(true);
 
-    try {
-      const r = await fetch(FN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ programId, question: q }),
-      });
+  try {
+    const r = await fetch(FN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ programId, question: q }),
+    });
 
-      const j = await r.json();
-      const text = j?.answerText || j?.error || "No response";
+    const j = await r.json();
+    const text = j?.answerText || j?.error || "No response";
 
-      setMessages((m) => [...m, { role: "ai", text }]);
-    } catch (e) {
-      setMessages((m) => [
-        ...m,
-        { role: "ai", text: "Request failed. Check console/network." },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    setMessages((m) => [...m, { role: "ai", text }]);
+  } catch (e) {
+    setMessages((m) => [
+      ...m,
+      { role: "ai", text: "Request failed. Check console/network." },
+    ]);
+  } finally {
+    setLoading(false);
   }
+}
 
   function onKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       ask();
     }
+  }
+
+  function handleQuickAsk(q) {
+    setQuestion(q); // optional (so user sees it)
+    ask(q);         // directly sends
   }
 
   return (
@@ -88,12 +93,25 @@ export default function AssistantDrawer({ open, onClose, programId }) {
             {messages.length === 0 ? (
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
                 Ask questions like:
-                <div className="mt-2 space-y-1 text-xs text-gray-600">
-                  <div>• What are the totals for MS vs NF?</div>
-                  <div>• Summarize external contractors for this program.</div>
-                  <div>• What changed recently in Tools & Services?</div>
-                </div>
-              </div>
+              
+              <div className="mt-2 space-y-2 text-xs">
+                {[
+                    "What are the totals for MS vs NF?",
+                    "Summarize external contractors for this program.",
+                    "What changed recently in Tools & Services?",
+                ].map((q) => (
+                    <button
+                    key={q}
+                    type="button"
+                    onClick={() => handleQuickAsk(q)}
+                    className="block w-full text-left rounded-lg bg-gray-100 hover:bg-gray-200 px-3 py-2 transition text-gray-700"
+                    >
+                    {q}
+                    </button>
+                ))}
+             </div> 
+            </div>  
+
             ) : (
               <div className="space-y-3">
                 {messages.map((m, idx) => (

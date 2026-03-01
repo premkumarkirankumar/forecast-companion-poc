@@ -199,6 +199,7 @@ export default function ToolsServicesDetails({
         name: "",
         totalYear: "",
     });
+    const [showSavedItems, setShowSavedItems] = useState(false);
 
     function upd(k, v) {
         setDraft((d) => ({ ...d, [k]: v }));
@@ -338,12 +339,20 @@ export default function ToolsServicesDetails({
     return (
         <div className="space-y-4">
             <div className={subtlePanel}>
-                <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
-                <div className="mt-1 text-xs text-gray-600">
-                    Add Tool/Service → set yearly target → edit MS by month (auto rebalances remaining months).
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
+                        <div className="mt-1 text-xs text-gray-600">
+                            Add Tool/Service → set yearly target → edit MS by month (auto rebalances remaining months).
+                        </div>
+                    </div>
+
+                    <div className="hidden sm:flex items-center gap-2 rounded-xl bg-white/60 px-3 py-2 text-xs text-gray-600 ring-1 ring-gray-100">
+                        Quarter separators at Apr / Jul / Oct
+                    </div>
                 </div>
 
-                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
+                <div className="mt-3 sm:hidden inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
                     Quarter separators at Apr / Jul / Oct
                 </div>
 
@@ -403,49 +412,117 @@ export default function ToolsServicesDetails({
                     No Tools & Services items added yet.
                 </div>
             ) : (
-                (items || []).map((s) => {
-                    const msYear = MONTHS.reduce((a, m) => a + (s.msByMonth?.[m] ?? 0), 0);
-                    const nfYear = 0;
-                    const totalYear = msYear;
+                <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                    <button
+                        type="button"
+                        onClick={() => setShowSavedItems((prev) => !prev)}
+                        aria-expanded={showSavedItems}
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50"
+                    >
+                        <div className="min-w-0">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                Saved Tools & Services Entries
+                            </div>
+                            <div className="mt-1 text-base font-bold text-gray-900">
+                                {(items || []).length} {(items || []).length === 1 ? "entry" : "entries"}
+                            </div>
+                            <div className="mt-1 text-sm text-gray-600">
+                                Click to {showSavedItems ? "hide" : "view"} saved tools and services details
+                            </div>
+                        </div>
 
-                    const expanded = isExpanded(s.id);
-
-                    return (
-                        <div key={s.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-                            {/* Header row */}
-                            <button
-                                onClick={() => toggleExpanded(s.id)}
-                                className="w-full px-5 py-4 text-left"
+                        <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                            <span>{showSavedItems ? "Hide list" : "Show list"}</span>
+                            <span
+                                className={[
+                                    "text-sm transition-transform duration-200",
+                                    showSavedItems ? "rotate-180" : "",
+                                ].join(" ")}
                             >
-                                <div className="flex flex-wrap items-start justify-between gap-4">
-                                    <div>
-                                        <div className="text-xs font-semibold text-gray-600">Tool / Service Name</div>
-                                        <div className="mt-1 text-lg font-bold text-gray-900">
-                                            {s.name || "Untitled"}
-                                        </div>
-                                        <div className="mt-1 text-sm text-gray-600">
-                                            Year Target: <span className="font-semibold">{fmt(s.yearTargetTotal)}</span>{" "}
-                                            • Split <span className="font-semibold">MS 100%</span> /{" "}
-                                            <span className="font-semibold">NF 0%</span>
-                                        </div>
-                                    </div>
+                                ▾
+                            </span>
+                        </div>
+                    </button>
 
-                                    <div className="flex items-center gap-2">
-                                        <div className="rounded-full bg-purple-50 px-4 py-2 text-sm font-bold text-gray-900 ring-1 ring-purple-200">
-                                            Total (calc): {fmt(totalYear)}
+                    <div
+                        className={[
+                            "overflow-hidden transition-all duration-200 ease-out",
+                            showSavedItems ? "mt-3 max-h-[200rem] opacity-100" : "max-h-0 opacity-0",
+                        ].join(" ")}
+                    >
+                        <div className="space-y-3 border-t border-gray-100 pt-3">
+                            {(items || []).map((s) => {
+                                const msYear = MONTHS.reduce((a, m) => a + (s.msByMonth?.[m] ?? 0), 0);
+                                const nfYear = 0;
+                                const totalYear = msYear;
+
+                                const expanded = isExpanded(s.id);
+
+                                return (
+                                    <div
+                                        key={s.id}
+                                        className={[
+                                            "rounded-2xl border bg-white px-4 py-4 shadow-sm transition",
+                                            expanded
+                                                ? "border-gray-300 shadow-md"
+                                                : "border-gray-200 hover:border-gray-300",
+                                        ].join(" ")}
+                                    >
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleExpanded(s.id)}
+                                                aria-expanded={expanded}
+                                                className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-gray-50"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                                        Tool / Service Name
+                                                    </div>
+                                                    <div className="mt-1 truncate text-lg font-bold text-gray-900">
+                                                        {s.name || "Untitled"}
+                                                    </div>
+                                                    <div className="mt-1 text-sm font-medium text-gray-600">
+                                                        Year Target: <span className="font-semibold">{fmt(s.yearTargetTotal)}</span>{" "}
+                                                        • Split <span className="font-semibold">MS 100%</span> /{" "}
+                                                        <span className="font-semibold">NF 0%</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <div className="rounded-full bg-purple-50 px-3 py-1.5 text-xs font-bold text-gray-900 ring-1 ring-purple-200">
+                                                        Total (calc): {fmt(totalYear)}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                                                        <span>{expanded ? "Hide details" : "Edit details"}</span>
+                                                        <span
+                                                            className={[
+                                                                "text-sm transition-transform duration-200",
+                                                                expanded ? "rotate-180" : "",
+                                                            ].join(" ")}
+                                                        >
+                                                            ▾
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            <button
+                                                onClick={() => removeItem(s.id)}
+                                                className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                                            >
+                                                Remove
+                                            </button>
                                         </div>
 
-                                        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
-                                            {expanded ? "Hide" : "Show"}{" "}
-                                            <span className="ml-1">{expanded ? "▾" : "▸"}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </button>
-
-                            {/* Expanded */}
-                            {expanded ? (
-                                <div className="border-t border-gray-100 px-5 py-5">
+                                        <div
+                                            className={[
+                                                "overflow-hidden transition-all duration-200 ease-out",
+                                                expanded ? "mt-3 max-h-[200rem] opacity-100" : "max-h-0 opacity-0",
+                                            ].join(" ")}
+                                        >
+                                            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                                {/* Expanded */}
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="text-sm font-semibold text-gray-900">Tool / Service Name (editable)</div>
 
@@ -456,13 +533,6 @@ export default function ToolsServicesDetails({
                                                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
                                             >
                                                 Update
-                                            </button>
-
-                                            <button
-                                                onClick={() => removeItem(s.id)}
-                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
-                                            >
-                                                Remove
                                             </button>
                                         </div>
                                     </div>
@@ -590,11 +660,14 @@ export default function ToolsServicesDetails({
                                     <div className="mt-3 text-xs text-gray-500">
                                         Tip: Editing a month locks that month and redistributes the remaining amount across other months.
                                     </div>
-                                </div>
-                            ) : null}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    );
-                })
+                    </div>
+                </div>
             )}
         </div>
     );

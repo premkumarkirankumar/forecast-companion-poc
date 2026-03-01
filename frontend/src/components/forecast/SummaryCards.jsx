@@ -161,9 +161,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const activeSectionKey = `pfc.ui.activeSection`; // internal|tools|external
 
   // UI keys (tabs are per-program; kept for state compatibility)
-  const internalTabKey = `pfc.${programKey}.ui.internalTab`;
-  const externalTabKey = `pfc.${programKey}.ui.externalTab`;
-  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`;
 
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
@@ -174,9 +171,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   );
 
   // Tabs (UI-only; content shows both)
-  const [, setInternalTab] = useLocalStorageState(internalTabKey, "total");
-  const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
-  const [, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
   /* =========================================================
      PROGRAM DATA STATE (Firestore-backed)
@@ -599,7 +593,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     },
     tools: {
       title: "Tools & Services",
-      subtitle: "Forecast tracking for tools and shared services",
+      subtitle: "Forecast tracking for tools and services",
       panel: "border-purple-200 bg-purple-50/60",
       header: "text-purple-950",
       pill: {
@@ -701,146 +695,39 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 {activeMeta.subtitle}
               </div>
             </div>
-          </div>
 
-          {/* INTERNAL */}
-          {activeSection === "internal" ? (
-            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setInternalTab("total")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  Internal Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInternalTab("details")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  Internal Details
-                </button>
-
-                <div className="flex-1" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      confirm(
-                        `Clear saved Internal labor items for ${programKey}?`
-                      )
-                    ) {
-                      setInternalLaborItems([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset Internal
-                </button>
-              </div>
-
-              <div className="mt-5">
-                <InternalLabor
-                  mode="total"
-                  items={internalLaborItems}
-                  setItems={setInternalLaborItems}
-                  onLog={logInternal}
-                />
-              </div>
-
-              <div className="mt-6 border-t pt-6">
-                <InternalLabor
-                  mode="details"
-                  items={internalLaborItems}
-                  setItems={setInternalLaborItems}
-                  onLog={logInternal}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {/* TOOLS & SERVICES */}
-          {activeSection === "tools" ? (
-            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTnsTab("total")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  T&amp;S Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTnsTab("details")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  T&amp;S Details
-                </button>
-
-                <div className="flex-1" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      confirm(`Clear saved Tools & Services for ${programKey}?`)
-                    ) {
-                      setTnsItems([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset T&amp;S
-                </button>
-
-                {/* ✅ Removed Reset T&S Log button */}
-              </div>
-
-              {/* ✅ Month filter restored for Tools & Services */}
-              <div className="mt-5">
-                <MonthTable
-                  title="Tools & Services"
-                  rows={tnsMonthlyRows}
-                  showMonthFilter={true}
-                />
-              </div>
-
-              <div className="mt-6 border-t pt-6">
-                <ToolsServicesDetails
-                  programKey={programKey}
-                  items={tnsItems}
-                  setItems={setTnsItems}
-                  onLog={logTns}
-                  onCommitNow={() => commitNow("tools")}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {/* EXTERNAL */}
-          {activeSection === "external" ? (
-            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setExternalTab("total")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  External Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExternalTab("details")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  External Details
-                </button>
-
-                <div className="flex-1" />
-
+            {activeSection === "internal" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Clear saved Internal labor items for ${programKey}?`
+                    )
+                  ) {
+                    setInternalLaborItems([]);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Reset Internal
+              </button>
+            ) : activeSection === "tools" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(`Clear saved Tools & Services for ${programKey}?`)
+                  ) {
+                    setTnsItems([]);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Reset Tools &amp; Services
+              </button>
+            ) : activeSection === "external" ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -865,12 +752,66 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   Reset SOWs
                 </button>
               </div>
+            ) : null}
+          </div>
 
-              <div className="mt-5">
+          {/* INTERNAL */}
+          {activeSection === "internal" ? (
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+              <div>
+                <InternalLabor
+                  mode="total"
+                  items={internalLaborItems}
+                  setItems={setInternalLaborItems}
+                  onLog={logInternal}
+                />
+              </div>
+
+              <div className="mt-6 border-t pt-6">
+                <InternalLabor
+                  mode="details"
+                  items={internalLaborItems}
+                  setItems={setInternalLaborItems}
+                  onLog={logInternal}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {/* TOOLS & SERVICES */}
+          {activeSection === "tools" ? (
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+              {/* ✅ Month filter restored for Tools & Services */}
+              <div>
                 <MonthTable
-                  title="External"
+                  title="Monthly Spend Snapshot"
+                  rows={tnsMonthlyRows}
+                  showMonthFilter={true}
+                  executiveSummary={true}
+                />
+              </div>
+
+              <div className="mt-6 border-t pt-6">
+                <ToolsServicesDetails
+                  programKey={programKey}
+                  items={tnsItems}
+                  setItems={setTnsItems}
+                  onLog={logTns}
+                  onCommitNow={() => commitNow("tools")}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {/* EXTERNAL */}
+          {activeSection === "external" ? (
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+              <div>
+                <MonthTable
+                  title="Monthly Spend Snapshot"
                   rows={externalMonthlyRows}
                   showMonthFilter={true}
+                  executiveSummary={true}
                 />
               </div>
 

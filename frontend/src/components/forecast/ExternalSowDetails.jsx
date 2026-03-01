@@ -229,6 +229,7 @@ export default function ExternalSowDetails({
     msPct: "",
     nfPct: "",
   });
+  const [showSavedItems, setShowSavedItems] = useState(false);
 
   function upd(k, v) {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -522,13 +523,52 @@ export default function ExternalSowDetails({
       </div>
 
       {/* SOW accordion cards */}
-      <div className="mt-5 space-y-3">
+      <div className="mt-5">
         {sows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/60 p-4 text-sm text-gray-600">
             No SOW items added yet.
           </div>
         ) : (
-          sows.map((s) => {
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setShowSavedItems((prev) => !prev)}
+              aria-expanded={showSavedItems}
+              className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50"
+            >
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Saved SOW Entries
+                </div>
+                <div className="mt-1 text-base font-bold text-gray-900">
+                  {sows.length} {sows.length === 1 ? "entry" : "entries"}
+                </div>
+                <div className="mt-1 text-sm text-gray-600">
+                  Click to {showSavedItems ? "hide" : "view"} saved SOW details
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                <span>{showSavedItems ? "Hide list" : "Show list"}</span>
+                <span
+                  className={[
+                    "text-sm transition-transform duration-200",
+                    showSavedItems ? "rotate-180" : "",
+                  ].join(" ")}
+                >
+                  ▾
+                </span>
+              </div>
+            </button>
+
+            <div
+              className={[
+                "overflow-hidden transition-all duration-200 ease-out",
+                showSavedItems ? "mt-3 max-h-[200rem] opacity-100" : "max-h-0 opacity-0",
+              ].join(" ")}
+            >
+              <div className="space-y-3 border-t border-gray-100 pt-3">
+                {sows.map((s) => {
             const msYear = MONTHS.reduce(
               (a, m) => a + num(s.msByMonth?.[m]),
               0
@@ -544,57 +584,83 @@ export default function ExternalSowDetails({
             return (
               <div
                 key={s.id}
-                className="rounded-2xl border border-emerald-200/50 bg-white shadow-sm"
+                className={[
+                  "rounded-2xl border bg-white px-4 py-4 shadow-sm transition",
+                  expanded
+                    ? "border-emerald-300 shadow-md"
+                    : "border-emerald-200/50 hover:border-emerald-300",
+                ].join(" ")}
               >
-                {/* Header row */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(s.id)}
-                  className="w-full px-5 py-4 text-left"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-[280px]">
-                      <div className="text-xs font-medium text-gray-600">
-                        SOW Name
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-gray-900">
-                        {s.name || "Untitled"}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-600">
-                        Year Target:{" "}
-                        <span className="font-semibold">
-                          {fmt(s.yearTargetTotal)}
-                        </span>{" "}
-                        • Split{" "}
-                        <span className="font-semibold text-blue-700">
-                          MS {s.msPct}%
-                        </span>{" "}
-                        /{" "}
-                        <span className="font-semibold text-purple-700">
-                          NF {s.nfPct}%
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-gray-700 ring-1 ring-emerald-100">
-                        Total (calc):{" "}
-                        <span className="font-semibold">{fmt(totalYear)}</span>
+                <div className="flex items-center justify-between gap-3">
+                  {/* Header row */}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(s.id)}
+                    aria-expanded={expanded}
+                    className="min-w-0 flex-1 rounded-xl px-2 py-2 text-left transition hover:bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-[280px]">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          SOW Name
+                        </div>
+                        <div className="mt-1 text-lg font-bold text-gray-900">
+                          {s.name || "Untitled"}
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-gray-600">
+                          Year Target:{" "}
+                          <span className="font-semibold">
+                            {fmt(s.yearTargetTotal)}
+                          </span>{" "}
+                          • Split{" "}
+                          <span className="font-semibold text-blue-700">
+                            MS {s.msPct}%
+                          </span>{" "}
+                          /{" "}
+                          <span className="font-semibold text-purple-700">
+                            NF {s.nfPct}%
+                          </span>
+                        </div>
                       </div>
 
-                      <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">
-                        {expanded ? "Hide" : "Show"}
-                      </span>
-                      <span className="text-lg text-gray-600">
-                        {expanded ? "▾" : "▸"}
-                      </span>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <div className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-gray-900 ring-1 ring-emerald-200">
+                          Total (calc):{" "}
+                          <span className="font-semibold">{fmt(totalYear)}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                          <span>{expanded ? "Hide details" : "Edit details"}</span>
+                          <span
+                            className={[
+                              "text-sm transition-transform duration-200",
+                              expanded ? "rotate-180" : "",
+                            ].join(" ")}
+                          >
+                            ▾
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => removeSow(s.id)}
+                    className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Remove
+                  </button>
+                </div>
 
                 {/* Expanded details */}
-                {expanded ? (
-                  <div className="border-t border-gray-100">
+                <div
+                  className={[
+                    "overflow-hidden transition-all duration-200 ease-out",
+                    expanded ? "mt-3 max-h-[200rem] opacity-100" : "max-h-0 opacity-0",
+                  ].join(" ")}
+                >
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50">
                     <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
                       <div className="w-full sm:w-auto">
                         <div className="text-xs font-medium text-gray-600">
@@ -623,14 +689,6 @@ export default function ExternalSowDetails({
                           className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
                         >
                           Regenerate
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => removeSow(s.id)}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
-                        >
-                          Remove
                         </button>
                       </div>
                     </div>
@@ -791,10 +849,13 @@ export default function ExternalSowDetails({
                       </table>
                     </div>
                   </div>
-                ) : null}
+                </div>
               </div>
             );
-          })
+          })}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
