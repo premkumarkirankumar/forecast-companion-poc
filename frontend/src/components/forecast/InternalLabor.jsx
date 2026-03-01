@@ -44,6 +44,7 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
     runPct: "",
     growthPct: "",
   });
+  const [openId, setOpenId] = useState(null);
 
   function upd(k, v) {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -236,16 +237,34 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
           {(items || []).map((x) => (
             <div key={x.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold text-gray-600">FTE Name</div>
-                  <div className="mt-1 text-lg font-bold text-gray-900">
-                    {x.name || "Untitled"}
+                <button
+                  type="button"
+                  onClick={() => setOpenId((prev) => (prev === x.id ? null : x.id))}
+                  className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
+                >
+                  <div>
+                    <div className="text-xs font-semibold text-gray-600">FTE Name</div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">
+                      {x.name || "Untitled"}
+                    </div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      Run <span className="font-semibold">{fmtPct(x.runPct)}</span> • Growth{" "}
+                      <span className="font-semibold">{fmtPct(x.growthPct)}</span>
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-gray-600">
-                    Run <span className="font-semibold">{fmtPct(x.runPct)}</span> • Growth{" "}
-                    <span className="font-semibold">{fmtPct(x.growthPct)}</span>
+
+                  <div className="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                    <span>{openId === x.id ? "Hide details" : "Edit details"}</span>
+                    <span
+                      className={[
+                        "text-sm transition-transform",
+                        openId === x.id ? "rotate-180" : "",
+                      ].join(" ")}
+                    >
+                      ▾
+                    </span>
                   </div>
-                </div>
+                </button>
 
                 <button
                   onClick={() => removeItem(x.id)}
@@ -255,34 +274,36 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
                 </button>
               </div>
 
-              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="md:col-span-1">
-                  <div className="text-xs font-semibold text-gray-700">FTE Name (editable)</div>
-                  <input
-                    value={x.name}
-                    onChange={(e) => updateItem(x.id, { name: e.target.value })}
-                    className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
-                  />
-                </div>
+              {openId === x.id ? (
+                <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 md:grid-cols-3">
+                  <div className="md:col-span-1">
+                    <div className="text-xs font-semibold text-gray-700">FTE Name</div>
+                    <input
+                      value={x.name}
+                      onChange={(e) => updateItem(x.id, { name: e.target.value })}
+                      className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+                    />
+                  </div>
 
-                <div>
-                  <div className="text-xs font-semibold text-gray-700">Run % (editable)</div>
-                  <input
-                    value={x.runPct}
-                    onChange={(e) => updateItem(x.id, { runPct: clampPct(e.target.value) })}
-                    className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
-                  />
-                </div>
+                  <div>
+                    <div className="text-xs font-semibold text-gray-700">Run %</div>
+                    <input
+                      value={x.runPct}
+                      onChange={(e) => updateItem(x.id, { runPct: clampPct(e.target.value) })}
+                      className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+                    />
+                  </div>
 
-                <div>
-                  <div className="text-xs font-semibold text-gray-700">Growth % (editable)</div>
-                  <input
-                    value={x.growthPct}
-                    onChange={(e) => updateItem(x.id, { growthPct: clampPct(e.target.value) })}
-                    className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
-                  />
+                  <div>
+                    <div className="text-xs font-semibold text-gray-700">Growth %</div>
+                    <input
+                      value={x.growthPct}
+                      onChange={(e) => updateItem(x.id, { growthPct: clampPct(e.target.value) })}
+                      className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           ))}
         </div>

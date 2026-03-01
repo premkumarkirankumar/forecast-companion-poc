@@ -161,7 +161,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const activeSectionKey = `pfc.ui.activeSection`; // internal|tools|external
 
   // UI keys (tabs are per-program; kept for state compatibility)
-  const internalTabKey = `pfc.${programKey}.ui.internalTab`;
   const externalTabKey = `pfc.${programKey}.ui.externalTab`;
   const tnsTabKey = `pfc.${programKey}.ui.tnsTab`;
 
@@ -174,7 +173,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   );
 
   // Tabs (UI-only; content shows both)
-  const [, setInternalTab] = useLocalStorageState(internalTabKey, "total");
   const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
   const [, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
@@ -701,47 +699,30 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 {activeMeta.subtitle}
               </div>
             </div>
+
+            {activeSection === "internal" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Clear saved Internal labor items for ${programKey}?`
+                    )
+                  ) {
+                    setInternalLaborItems([]);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Reset Internal
+              </button>
+            ) : null}
           </div>
 
           {/* INTERNAL */}
           {activeSection === "internal" ? (
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setInternalTab("total")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  Internal Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInternalTab("details")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  Internal Details
-                </button>
-
-                <div className="flex-1" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      confirm(
-                        `Clear saved Internal labor items for ${programKey}?`
-                      )
-                    ) {
-                      setInternalLaborItems([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset Internal
-                </button>
-              </div>
-
-              <div className="mt-5">
+              <div>
                 <InternalLabor
                   mode="total"
                   items={internalLaborItems}
