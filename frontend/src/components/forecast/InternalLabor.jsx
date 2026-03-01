@@ -41,6 +41,7 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
   // Add form draft
   const [draft, setDraft] = useState({
     name: "",
+    role: "",
     runPct: "",
     growthPct: "",
   });
@@ -59,6 +60,7 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
     const newItem = {
       id: crypto.randomUUID(),
       name: String(draft.name).trim(),
+      role: String(draft.role ?? "").trim(),
       runPct: clampPct(draft.runPct === "" ? 0 : draft.runPct),
       growthPct: clampPct(draft.growthPct === "" ? 0 : draft.growthPct),
     };
@@ -73,7 +75,7 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
       entityName: newItem.name,
     });
 
-    setDraft({ name: "", runPct: "", growthPct: "" });
+    setDraft({ name: "", role: "", runPct: "", growthPct: "" });
   }
 
   function removeItem(id) {
@@ -205,13 +207,23 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
           Add Internal FTE entries with run and growth assumptions.
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-5">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-6">
           <div className="md:col-span-2">
             <div className="text-xs font-semibold text-gray-700">FTE Name</div>
             <input
               value={draft.name}
               onChange={(e) => upd("name", e.target.value)}
               placeholder="e.g., Platform Engineer (Internal)"
+              className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <div className="text-xs font-semibold text-gray-700">Role</div>
+            <input
+              value={draft.role}
+              onChange={(e) => upd("role", e.target.value)}
+              placeholder="e.g., Platform Engineer"
               className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
             />
           </div>
@@ -236,12 +248,12 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
             />
           </div>
 
-          <div className="flex items-end">
+          <div className="flex items-end md:col-span-6 md:justify-end">
             <button
               onClick={addItem}
               disabled={!canAdd}
               className={[
-                "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
+                "w-full rounded-2xl px-4 py-3 text-sm font-semibold transition md:w-auto md:min-w-[180px]",
                 canAdd
                   ? "bg-gray-900 text-white hover:bg-gray-800"
                   : "bg-gray-100 text-gray-400 cursor-not-allowed",
@@ -324,7 +336,8 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
                         </div>
                         <div className="mt-1 text-sm font-medium text-gray-600">
                           Run <span className="font-semibold">{fmtPct(x.runPct)}</span> • Growth{" "}
-                          <span className="font-semibold">{fmtPct(x.growthPct)}</span>
+                          <span className="font-semibold">{fmtPct(x.growthPct)}</span> • Role:{" "}
+                          <span className="font-semibold">{x.role || "Not set"}</span>
                         </div>
                       </div>
 
@@ -355,12 +368,21 @@ export default function InternalLabor({ mode, items, setItems, onLog }) {
                       openId === x.id ? "mt-3 max-h-96 opacity-100" : "max-h-0 opacity-0",
                     ].join(" ")}
                   >
-                    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-3">
-                      <div className="md:col-span-1">
+                    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 md:grid-cols-4">
+                      <div>
                         <div className="text-xs font-semibold text-gray-700">FTE Name</div>
                         <input
                           value={x.name}
                           onChange={(e) => updateItem(x.id, { name: e.target.value })}
+                          className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold text-gray-700">Role</div>
+                        <input
+                          value={x.role || ""}
+                          onChange={(e) => updateItem(x.id, { role: e.target.value })}
                           className="mt-1 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900"
                         />
                       </div>

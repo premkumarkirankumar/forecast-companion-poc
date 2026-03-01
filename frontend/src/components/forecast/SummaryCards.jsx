@@ -235,6 +235,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
       .map((r) => ({
         id: crypto.randomUUID(),
         name: String(r.name ?? r["FTE Name"] ?? "").trim(),
+        role: String(r.role ?? r["Role"] ?? "").trim(),
         runPct: clampPct(r.runPct ?? r["Run %"] ?? 0),
         growthPct: clampPct(
           r.growPct ?? r.growthPct ?? r["Grow %"] ?? r["Growth %"] ?? 0
@@ -274,6 +275,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
     const nextContractors = (p.contractors || [])
       .map((r) => {
         const name = String(r.name ?? r["Contractor Name"] ?? "").trim();
+        const role = String(r.role ?? r["Role"] ?? "").trim();
 
         const ratePerHour = toNum(r.ratePerHour ?? r["Rate Per Hour"] ?? 0);
         const hoursPerWeek = toNum(r.hoursPerWeek ?? r["Hours Per Week"] ?? 0);
@@ -293,6 +295,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
         return {
           id: crypto.randomUUID(),
           name,
+          role,
           ratePerHour,
           hoursPerWeek,
           weeksPerYear,
@@ -314,6 +317,8 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
       .map((r) => {
         const name = String(r.name ?? r["SOW Name"] ?? "").trim();
         const yearTargetTotal = toNum(r.yearTotal ?? r["Total Per Year"] ?? 0);
+        const developersCount = r.totalDevelopers ?? r["Developers Count"] ?? null;
+        const qaCount = r.totalQa ?? r["QA Count"] ?? null;
 
         const split = normalizeSplit(
           r.msPct ?? r["MS %"] ?? 0,
@@ -327,6 +332,14 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
           id: crypto.randomUUID(),
           name,
           yearTargetTotal,
+          totalDevelopers:
+            developersCount === null || developersCount === undefined || developersCount === ""
+              ? null
+              : toNum(developersCount),
+          totalQa:
+            qaCount === null || qaCount === undefined || qaCount === ""
+              ? null
+              : toNum(qaCount),
           msPct: split.msPct,
           nfPct: split.nfPct,
           msByMonth: distributeEvenly(msYear),

@@ -89,6 +89,10 @@ function hasValue(v) {
   return String(v ?? "").trim().length > 0;
 }
 
+function optionalNum(v) {
+  return hasValue(v) ? num(v) : null;
+}
+
 function zeroMonthMap() {
   const m = {};
   for (const k of MONTHS) m[k] = 0;
@@ -127,6 +131,12 @@ function normalizeSowItem(raw) {
       id: raw.id || crypto.randomUUID(),
       name: String(raw.name || raw.sowName || "").trim(),
       yearTargetTotal,
+      totalDevelopers:
+        raw.totalDevelopers === null || raw.totalDevelopers === undefined
+          ? null
+          : num(raw.totalDevelopers),
+      totalQa:
+        raw.totalQa === null || raw.totalQa === undefined ? null : num(raw.totalQa),
       msPct,
       nfPct,
       msByMonth,
@@ -163,6 +173,11 @@ function normalizeSowItem(raw) {
     id: raw.id || crypto.randomUUID(),
     name: String(raw.name || raw.sowName || "").trim(),
     yearTargetTotal,
+    totalDevelopers:
+      raw.totalDevelopers === null || raw.totalDevelopers === undefined
+        ? null
+        : num(raw.totalDevelopers),
+    totalQa: raw.totalQa === null || raw.totalQa === undefined ? null : num(raw.totalQa),
     msPct: split.msPct,
     nfPct: split.nfPct,
 
@@ -226,6 +241,8 @@ export default function ExternalSowDetails({
   const [draft, setDraft] = useState({
     name: "",
     totalYear: "",
+    totalDevelopers: "",
+    totalQa: "",
     msPct: "",
     nfPct: "",
   });
@@ -268,6 +285,8 @@ export default function ExternalSowDetails({
     const newItem = {
       id: crypto.randomUUID(),
       name: String(draft.name).trim(),
+      totalDevelopers: optionalNum(draft.totalDevelopers),
+      totalQa: optionalNum(draft.totalQa),
       msPct: split.msPct,
       nfPct: split.nfPct,
       yearTargetTotal: yearTarget,
@@ -286,7 +305,14 @@ export default function ExternalSowDetails({
       entityName: newItem.name,
     });
 
-    setDraft({ name: "", totalYear: "", msPct: "", nfPct: "" });
+    setDraft({
+      name: "",
+      totalYear: "",
+      totalDevelopers: "",
+      totalQa: "",
+      msPct: "",
+      nfPct: "",
+    });
   }
 
   function removeSow(id) {
@@ -320,6 +346,46 @@ export default function ExternalSowDetails({
       field: "name",
       from: before,
       to: after,
+    });
+  }
+
+  function updateTotalDevelopers(id, value) {
+    const nextValue = hasValue(value) ? num(value) : null;
+    const existing = sows.find((s) => s.id === id);
+    const before = existing?.totalDevelopers ?? null;
+
+    if (before === nextValue) return;
+
+    updateSow(id, (s) => ({ ...s, totalDevelopers: nextValue }));
+
+    onLog?.({
+      action: "UPDATE_SOW_TOTAL_DEVELOPERS",
+      entityType: "sow",
+      entityId: id,
+      entityName: existing?.name,
+      field: "totalDevelopers",
+      from: before,
+      to: nextValue,
+    });
+  }
+
+  function updateTotalQa(id, value) {
+    const nextValue = hasValue(value) ? num(value) : null;
+    const existing = sows.find((s) => s.id === id);
+    const before = existing?.totalQa ?? null;
+
+    if (before === nextValue) return;
+
+    updateSow(id, (s) => ({ ...s, totalQa: nextValue }));
+
+    onLog?.({
+      action: "UPDATE_SOW_TOTAL_QA",
+      entityType: "sow",
+      entityId: id,
+      entityName: existing?.name,
+      field: "totalQa",
+      from: before,
+      to: nextValue,
     });
   }
 
@@ -460,8 +526,8 @@ export default function ExternalSowDetails({
       </div>
 
       {/* Add SOW form */}
-      <div className="mt-5 grid gap-3 rounded-2xl bg-white/70 p-4 ring-1 ring-gray-100 lg:grid-cols-12">
-        <div className="lg:col-span-5">
+      <div className="mt-5 grid gap-3 rounded-2xl bg-white/70 p-4 ring-1 ring-gray-100 lg:grid-cols-14">
+        <div className="lg:col-span-4">
           <label className="text-xs font-medium text-gray-600">SOW Name</label>
           <input
             className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
@@ -471,7 +537,7 @@ export default function ExternalSowDetails({
           />
         </div>
 
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <label className="text-xs font-medium text-gray-600">
             SOW Total (year)
           </label>
@@ -485,6 +551,28 @@ export default function ExternalSowDetails({
         </div>
 
         <div className="lg:col-span-2">
+          <label className="text-xs font-medium text-gray-600">Total Developers</label>
+          <input
+            type="number"
+            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
+            value={draft.totalDevelopers}
+            onChange={(e) => upd("totalDevelopers", e.target.value)}
+            placeholder="optional"
+          />
+        </div>
+
+        <div className="lg:col-span-2">
+          <label className="text-xs font-medium text-gray-600">Total QA</label>
+          <input
+            type="number"
+            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
+            value={draft.totalQa}
+            onChange={(e) => upd("totalQa", e.target.value)}
+            placeholder="optional"
+          />
+        </div>
+
+        <div className="lg:col-span-1">
           <label className="text-xs font-medium text-gray-600">MS %</label>
           <input
             type="number"
@@ -506,7 +594,7 @@ export default function ExternalSowDetails({
           />
         </div>
 
-        <div className="lg:col-span-1 flex items-end">
+        <div className="lg:col-span-2 flex items-end">
           <button
             onClick={addSow}
             disabled={!canAdd}
@@ -612,6 +700,14 @@ export default function ExternalSowDetails({
                           <span className="font-semibold">
                             {fmt(s.yearTargetTotal)}
                           </span>{" "}
+                          • Devs:{" "}
+                          <span className="font-semibold">
+                            {s.totalDevelopers ?? "Not available"}
+                          </span>{" "}
+                          • QA:{" "}
+                          <span className="font-semibold">
+                            {s.totalQa ?? "Not available"}
+                          </span>{" "}
                           • Split{" "}
                           <span className="font-semibold text-blue-700">
                             MS {s.msPct}%
@@ -694,7 +790,7 @@ export default function ExternalSowDetails({
                     </div>
 
                     {/* Inputs row */}
-                    <div className="grid gap-3 px-5 pb-4 md:grid-cols-5">
+                    <div className="grid gap-3 px-5 pb-4 md:grid-cols-7">
                       <div>
                         <label className="text-xs font-medium text-gray-600">
                           MS %
@@ -734,6 +830,32 @@ export default function ExternalSowDetails({
                           className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
                           value={Math.round(s.yearTargetTotal)}
                           onChange={(e) => setYearTarget(s.id, e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">
+                          Total Developers
+                        </label>
+                        <input
+                          type="number"
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
+                          value={s.totalDevelopers ?? ""}
+                          onChange={(e) => updateTotalDevelopers(s.id, e.target.value)}
+                          placeholder="optional"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-gray-600">
+                          Total QA
+                        </label>
+                        <input
+                          type="number"
+                          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 tabular-nums"
+                          value={s.totalQa ?? ""}
+                          onChange={(e) => updateTotalQa(s.id, e.target.value)}
+                          placeholder="optional"
                         />
                       </div>
 

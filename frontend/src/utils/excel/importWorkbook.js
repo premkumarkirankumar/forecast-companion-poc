@@ -41,17 +41,18 @@ const CATEGORY_KEYS = {
 
 // Expected headers (based on your uploaded template)
 const EXPECTED_HEADERS = {
-  internal: ["FTE Name", "Run %", "Growth %"],
+  internal: ["FTE Name", "Role", "Run %", "Growth %"],
   tns: ["Tool / Service Name", "Total Per Year", "MS %"],
   contractors: [
     "Contractor Name",
+    "Role",
     "Rate Per Hour",
     "Hours Per Week",
     "Weeks Per Year",
     "MS %",
     "NF %",
   ],
-  sows: ["SOW Name", "Total Per Year", "MS %", "NF %"],
+  sows: ["SOW Name", "Total Per Year", "Developers Count", "QA Count", "MS %", "NF %"],
 };
 
 /* =========================================================
@@ -306,6 +307,7 @@ function parseInternal({ sheet, rows, headerMap, errors, warnings }) {
 
     const rowNum = i + 1;
     const name = String(row[headerMap[norm("FTE Name")]] ?? "").trim();
+    const role = String(row[headerMap[norm("Role")]] ?? "").trim();
     const runPct = toPercent(row[headerMap[norm("Run %")]]);
     const growPct = toPercent(row[headerMap[norm("Growth %")]]);
 
@@ -337,6 +339,7 @@ function parseInternal({ sheet, rows, headerMap, errors, warnings }) {
     out.push({
       id: makeId(),
       name,
+      role,
       runPct: run,
       growthPct: grow, // ✅ UI expects this
     });
@@ -441,6 +444,7 @@ function parseContractors({ sheet, rows, headerMap, errors, warnings }) {
 
     const rowNum = i + 1;
     const name = String(row[headerMap[norm("Contractor Name")]] ?? "").trim();
+    const role = String(row[headerMap[norm("Role")]] ?? "").trim();
     const ratePerHour = toNumber(row[headerMap[norm("Rate Per Hour")]]);
     const hoursPerWeek = toNumber(row[headerMap[norm("Hours Per Week")]]);
     const weeksPerYear = toNumber(row[headerMap[norm("Weeks Per Year")]]);
@@ -535,6 +539,7 @@ function parseContractors({ sheet, rows, headerMap, errors, warnings }) {
     out.push({
       id: makeId(),
       name,
+      role,
       ratePerHour,
       hoursPerWeek,
       weeksPerYear,
@@ -556,6 +561,12 @@ function parseSows({ sheet, rows, headerMap, errors, warnings }) {
     const rowNum = i + 1;
     const name = String(row[headerMap[norm("SOW Name")]] ?? "").trim();
     const yearTotal = toNumber(row[headerMap[norm("Total Per Year")]]);
+    const developersCount = isBlank(row[headerMap[norm("Developers Count")]])
+      ? null
+      : toNumber(row[headerMap[norm("Developers Count")]]);
+    const qaCount = isBlank(row[headerMap[norm("QA Count")]])
+      ? null
+      : toNumber(row[headerMap[norm("QA Count")]]);
     const msRaw = toPercent(row[headerMap[norm("MS %")]]);
     const nfRaw = toPercent(row[headerMap[norm("NF %")]]);
 
@@ -579,6 +590,9 @@ function parseSows({ sheet, rows, headerMap, errors, warnings }) {
     });
 
     if (!validateNumber(sheet, rowNum, "Total Per Year", yearTotal, errors)) continue;
+    if (developersCount !== null && !validateNumber(sheet, rowNum, "Developers Count", developersCount, errors))
+      continue;
+    if (qaCount !== null && !validateNumber(sheet, rowNum, "QA Count", qaCount, errors)) continue;
 
     const msPctParsed = msRaw === null ? null : clampPct(msRaw);
     const nfPctParsed = nfRaw === null ? null : clampPct(nfRaw);
@@ -626,6 +640,8 @@ function parseSows({ sheet, rows, headerMap, errors, warnings }) {
       id: makeId(),
       name,
       yearTotal,
+      totalDevelopers: developersCount,
+      totalQa: qaCount,
       msPct,
       nfPct,
     });

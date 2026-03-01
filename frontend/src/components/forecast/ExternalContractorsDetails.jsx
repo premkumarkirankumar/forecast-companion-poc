@@ -138,6 +138,7 @@ function normalizeContractorItem(raw) {
       ...raw,
       id: raw.id || crypto.randomUUID(),
       name: String(raw.name || "").trim(),
+      role: String(raw.role || "").trim(),
       ratePerHour,
       hoursPerWeek,
       weeksPerYear,
@@ -159,6 +160,7 @@ function normalizeContractorItem(raw) {
     ...raw,
     id: raw.id || crypto.randomUUID(),
     name: String(raw.name || "").trim(),
+    role: String(raw.role || "").trim(),
     ratePerHour,
     hoursPerWeek,
     weeksPerYear,
@@ -247,6 +249,7 @@ export default function ExternalContractorsDetails({
 
   const [draft, setDraft] = useState({
     name: "",
+    role: "",
     ratePerHour: "",
     hoursPerWeek: "",
     weeksPerYear: "",
@@ -297,6 +300,7 @@ export default function ExternalContractorsDetails({
     const newItem = {
       id: crypto.randomUUID(),
       name: String(draft.name).trim(),
+      role: String(draft.role ?? "").trim(),
 
       ratePerHour: num(draft.ratePerHour),
       hoursPerWeek: num(draft.hoursPerWeek),
@@ -326,6 +330,7 @@ export default function ExternalContractorsDetails({
 
     setDraft({
       name: "",
+      role: "",
       ratePerHour: "",
       hoursPerWeek: "",
       weeksPerYear: "",
@@ -363,6 +368,26 @@ export default function ExternalContractorsDetails({
       entityId: id,
       entityName: existing?.name,
       field: "name",
+      from: before,
+      to: after,
+    });
+  }
+
+  function updateRole(id, role) {
+    const existing = contractors.find((c) => c.id === id);
+    const before = String(existing?.role ?? "");
+    const after = String(role ?? "");
+
+    if (before === after) return;
+
+    updateContractor(id, (c) => ({ ...c, role: after }));
+
+    onLog?.({
+      action: "UPDATE_CONTRACTOR_ROLE",
+      entityType: "contractor",
+      entityId: id,
+      entityName: existing?.name,
+      field: "role",
       from: before,
       to: after,
     });
@@ -563,7 +588,7 @@ export default function ExternalContractorsDetails({
       </div>
 
       {/* Add contractor form */}
-      <div className="mt-5 grid gap-3 rounded-2xl bg-white/70 p-4 ring-1 ring-gray-100 lg:grid-cols-12">
+      <div className="mt-5 grid gap-3 rounded-2xl bg-white/70 p-4 ring-1 ring-gray-100 lg:grid-cols-14">
         <div className="lg:col-span-3">
           <label className="text-xs font-medium text-gray-600">Contractor Name</label>
           <input
@@ -571,6 +596,16 @@ export default function ExternalContractorsDetails({
             value={draft.name}
             onChange={(e) => upd("name", e.target.value)}
             placeholder="e.g., Tony Stark"
+          />
+        </div>
+
+        <div className="lg:col-span-2">
+          <label className="text-xs font-medium text-gray-600">Role</label>
+          <input
+            className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+            value={draft.role}
+            onChange={(e) => upd("role", e.target.value)}
+            placeholder="e.g., Data Engineer"
           />
         </div>
 
@@ -629,7 +664,7 @@ export default function ExternalContractorsDetails({
           />
         </div>
 
-        <div className="lg:col-span-1 flex items-end">
+        <div className="lg:col-span-2 flex items-end">
           <button
             onClick={addContractor}
             disabled={!canAdd}
@@ -725,6 +760,7 @@ export default function ExternalContractorsDetails({
                           {c.name || "Untitled"}
                         </div>
                         <div className="mt-1 text-sm font-medium text-gray-600">
+                          Role: <span className="font-semibold">{c.role || "Not set"}</span> •{" "}
                           Year Target:{" "}
                           <span className="font-semibold">{fmt(c.yearTargetTotal)}</span>{" "}
                           • Split{" "}
@@ -784,6 +820,17 @@ export default function ExternalContractorsDetails({
                           className="mt-1 w-full sm:w-[360px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-200"
                           value={c.name}
                           onChange={(e) => updateName(c.id, e.target.value)}
+                        />
+                      </div>
+
+                      <div className="w-full sm:w-auto">
+                        <div className="text-xs font-medium text-gray-600">
+                          Role (editable)
+                        </div>
+                        <input
+                          className="mt-1 w-full sm:w-[280px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-200"
+                          value={c.role || ""}
+                          onChange={(e) => updateRole(c.id, e.target.value)}
                         />
                       </div>
 

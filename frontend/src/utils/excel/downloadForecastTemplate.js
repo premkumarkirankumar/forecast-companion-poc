@@ -20,17 +20,18 @@ const SHEETS = [
 ];
 
 const HEADERS = {
-  internal: ["FTE Name", "Run %", "Grow %"],
+  internal: ["FTE Name", "Role", "Run %", "Grow %"],
   tns: ["Tool / Service Name", "Total Per Year", "MS %"],
   contractors: [
     "Contractor Name",
+    "Role",
     "Rate Per Hour",
     "Hours Per Week",
     "Weeks Per Year",
     "MS %",
     "NF %",
   ],
-  sows: ["SOW Name", "Total Per Year", "MS %", "NF %"],
+  sows: ["SOW Name", "Total Per Year", "Developers Count", "QA Count", "MS %", "NF %"],
 };
 
 function categoryForSheet(sheetName) {
@@ -63,10 +64,10 @@ export function downloadForecastTemplate({ includeSampleRow = true } = {}) {
     // Optional sample row (helps users know how to fill it)
     let sample = null;
     if (includeSampleRow) {
-      if (cat === "internal") sample = ["John Doe", 70, 30];
+      if (cat === "internal") sample = ["John Doe", "Platform Engineer", 70, 30];
       if (cat === "tns") sample = ["GitHub Enterprise", 120000, 100];
-      if (cat === "contractors") sample = ["Contractor A", 75, 40, 48, 100, 0];
-      if (cat === "sows") sample = ["SOW - Vendor X", 250000, 60, 40];
+      if (cat === "contractors") sample = ["Contractor A", "Data Engineer", 75, 40, 48, 100, 0];
+      if (cat === "sows") sample = ["SOW - Vendor X", 250000, 2, 3, 60, 40];
     }
 
     const aoa = makeSheetAoA(headers, sample);
