@@ -21,11 +21,23 @@ function cellClass(m, isTotal = false) {
   ].join(" ");
 }
 
+function selectedTotalCellClass(isTotal = false) {
+  return [
+    "px-4 py-2 text-right border-l border-gray-200 bg-slate-50/70",
+    isTotal ? "text-sm font-bold text-gray-900" : "text-sm font-semibold text-gray-900",
+  ].join(" ");
+}
+
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-export default function MonthTable({ title, rows, showMonthFilter = false }) {
+export default function MonthTable({
+  title,
+  rows,
+  showMonthFilter = false,
+  executiveSummary = false,
+}) {
   // Month range selection (0..11)
   const [startIdx, setStartIdx] = useState(0);
   const [endIdx, setEndIdx] = useState(MONTHS.length - 1);
@@ -47,27 +59,63 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
     return `${visibleMonths[0]}–${visibleMonths[visibleMonths.length - 1]} view`;
   }, [showMonthFilter, visibleMonths]);
 
+  const summary = useMemo(() => {
+    if (!executiveSummary || visibleMonths.length === 0) return null;
+
+    const totalsByMonth = visibleMonths.map((m) => ({
+      month: m,
+      total: (rows || []).reduce(
+        (acc, r) =>
+          acc + Number(r.msByMonth?.[m] ?? 0) + Number(r.nfByMonth?.[m] ?? 0),
+        0
+      ),
+    }));
+
+    const selectedTotal = totalsByMonth.reduce((acc, x) => acc + x.total, 0);
+    const monthlyAverage = selectedTotal / visibleMonths.length;
+    const peakMonth = totalsByMonth.reduce(
+      (best, x) => (x.total > best.total ? x : best),
+      totalsByMonth[0]
+    );
+    const lowMonth = totalsByMonth.reduce(
+      (best, x) => (x.total < best.total ? x : best),
+      totalsByMonth[0]
+    );
+
+    return {
+      selectedTotal,
+      monthlyAverage,
+      peakMonth,
+      lowMonth,
+    };
+  }, [executiveSummary, rows, visibleMonths]);
+
   function sumForMonths(map, months) {
     return months.reduce((acc, m) => acc + Number(map?.[m] ?? 0), 0);
   }
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
         <div className="text-base font-bold text-gray-900">{title}</div>
 
         <div className="flex flex-wrap items-center justify-end gap-4">
           {/* ✅ Month Filter (optional) */}
           {showMonthFilter ? (
-            <div className="flex flex-col gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
-              <div className="flex items-center justify-between gap-4">
-                <div className="text-xs font-semibold text-gray-700">Month range</div>
-                <div className="text-xs font-bold text-gray-900">{viewLabel}</div>
-              </div>
+            <div className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 lg:w-auto lg:min-w-[760px]">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-[auto_minmax(180px,1fr)_minmax(180px,1fr)_auto] lg:items-center">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    Month Range
+                  </div>
+                  <span className="text-sm font-bold text-gray-900">{viewLabel}</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-600 ring-1 ring-gray-200">
+                    {visibleMonths.length} mo
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 {/* Start */}
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center justify-between">
                     <div className="text-[11px] font-semibold text-gray-600">Start</div>
                     <div className="text-[11px] font-bold text-gray-900">
@@ -80,12 +128,12 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
                     max={MONTHS.length - 1}
                     value={normalized.s}
                     onChange={(e) => setStartIdx(Number(e.target.value))}
-                    className="w-44"
+                    className="mt-1 w-full"
                   />
                 </div>
 
                 {/* End */}
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center justify-between">
                     <div className="text-[11px] font-semibold text-gray-600">End</div>
                     <div className="text-[11px] font-bold text-gray-900">
@@ -98,27 +146,20 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
                     max={MONTHS.length - 1}
                     value={normalized.e}
                     onChange={(e) => setEndIdx(Number(e.target.value))}
-                    className="w-44"
+                    className="mt-1 w-full"
                   />
                 </div>
-              </div>
 
-              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => {
                     setStartIdx(0);
                     setEndIdx(MONTHS.length - 1);
                   }}
-                  className="text-xs font-semibold text-gray-700 hover:text-gray-900"
+                  className="justify-self-start text-xs font-semibold text-gray-700 hover:text-gray-900 lg:justify-self-end"
                 >
                   Reset
                 </button>
-
-                <div className="text-[11px] font-semibold text-gray-500">
-                  Selected months:{" "}
-                  <span className="font-bold text-gray-800">{visibleMonths.length}</span>
-                </div>
               </div>
             </div>
           ) : (
@@ -126,6 +167,49 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
           )}
         </div>
       </div>
+
+      {summary ? (
+        <div className="grid grid-cols-1 gap-3 border-t border-gray-100 px-5 py-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Selected Total
+            </div>
+            <div className="mt-1 text-lg font-extrabold text-gray-900">
+              {fmt(summary.selectedTotal)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Monthly Average
+            </div>
+            <div className="mt-1 text-lg font-extrabold text-gray-900">
+              {fmt(summary.monthlyAverage)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Peak Month
+            </div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">
+              {summary.peakMonth.month}
+            </div>
+            <div className="mt-1 text-base font-extrabold text-gray-900">
+              {fmt(summary.peakMonth.total)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              Lowest Month
+            </div>
+            <div className="mt-1 text-sm font-semibold text-gray-900">
+              {summary.lowMonth.month}
+            </div>
+            <div className="mt-1 text-base font-extrabold text-gray-900">
+              {fmt(summary.lowMonth.total)}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto">
         <table className="min-w-[1180px] w-full border-t border-gray-200">
@@ -140,7 +224,7 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
                 </th>
               ))}
 
-              <th className="px-4 py-3 text-right font-semibold border-l border-gray-200">
+              <th className="px-4 py-3 text-right font-semibold border-l border-gray-200 bg-slate-50/70">
                 {showMonthFilter ? "Selected Total" : "Year"}
               </th>
             </tr>
@@ -167,7 +251,7 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
                       </td>
                     ))}
 
-                    <td className="px-4 py-2 text-right text-sm font-semibold border-l border-gray-200">
+                    <td className={selectedTotalCellClass(false)}>
                       {fmt(msSelected)}
                     </td>
                   </tr>
@@ -182,31 +266,65 @@ export default function MonthTable({ title, rows, showMonthFilter = false }) {
                       </td>
                     ))}
 
-                    <td className="px-4 py-2 text-right text-sm font-semibold border-l border-gray-200">
+                    <td className={selectedTotalCellClass(false)}>
                       {fmt(nfSelected)}
                     </td>
                   </tr>
 
                   {/* Total Row */}
-                  <tr className="border-t border-gray-200">
+                  <tr className="border-t border-gray-200 bg-slate-50/40">
                     <td className={typeCellClass(true)}>Total</td>
 
-                    {visibleMonths.map((m) => {
+                    {visibleMonths.map((m, idx) => {
                       const ms = r.msByMonth?.[m];
                       const nf = r.nfByMonth?.[m];
                       const total =
                         ms === undefined && nf === undefined
                           ? undefined
                           : Number(ms ?? 0) + Number(nf ?? 0);
+                      const prevMonth = idx > 0 ? visibleMonths[idx - 1] : null;
+                      const prevTotal =
+                        prevMonth == null
+                          ? undefined
+                          : Number(r.msByMonth?.[prevMonth] ?? 0) +
+                            Number(r.nfByMonth?.[prevMonth] ?? 0);
+                      const trend =
+                        idx === 0 || total === undefined || prevTotal === undefined
+                          ? null
+                          : total > prevTotal
+                            ? "up"
+                            : total < prevTotal
+                              ? "down"
+                              : "flat";
 
                       return (
                         <td key={`total-${r.label}-${m}`} className={cellClass(m, true)}>
-                          {total === undefined ? "$—" : fmt(total)}
+                          {total === undefined ? (
+                            "$—"
+                          ) : (
+                            <div className="flex items-center justify-end gap-1">
+                              <span>{fmt(total)}</span>
+                              {trend ? (
+                                <span
+                                  className={[
+                                    "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                                    trend === "up"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : trend === "down"
+                                        ? "bg-rose-100 text-rose-700"
+                                        : "bg-gray-100 text-gray-600",
+                                  ].join(" ")}
+                                >
+                                  {trend === "up" ? "↑" : trend === "down" ? "↓" : "•"}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
                         </td>
                       );
                     })}
 
-                    <td className="px-4 py-2 text-right text-sm font-bold border-l border-gray-200">
+                    <td className={selectedTotalCellClass(true)}>
                       {fmt(totalSelected)}
                     </td>
                   </tr>

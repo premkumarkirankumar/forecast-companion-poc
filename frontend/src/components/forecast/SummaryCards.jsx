@@ -162,7 +162,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
   // UI keys (tabs are per-program; kept for state compatibility)
   const externalTabKey = `pfc.${programKey}.ui.externalTab`;
-  const tnsTabKey = `pfc.${programKey}.ui.tnsTab`;
 
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
@@ -174,7 +173,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
   // Tabs (UI-only; content shows both)
   const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
-  const [, setTnsTab] = useLocalStorageState(tnsTabKey, "total");
 
   /* =========================================================
      PROGRAM DATA STATE (Firestore-backed)
@@ -597,7 +595,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     },
     tools: {
       title: "Tools & Services",
-      subtitle: "Forecast tracking for tools and shared services",
+      subtitle: "Forecast tracking for tools and services",
       panel: "border-purple-200 bg-purple-50/60",
       header: "text-purple-950",
       pill: {
@@ -716,6 +714,20 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
               >
                 Reset Internal
               </button>
+            ) : activeSection === "tools" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(`Clear saved Tools & Services for ${programKey}?`)
+                  ) {
+                    setTnsItems([]);
+                  }
+                }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+              >
+                Reset T&amp;S
+              </button>
             ) : null}
           </div>
 
@@ -745,47 +757,13 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
           {/* TOOLS & SERVICES */}
           {activeSection === "tools" ? (
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTnsTab("total")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  T&amp;S Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTnsTab("details")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  T&amp;S Details
-                </button>
-
-                <div className="flex-1" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (
-                      confirm(`Clear saved Tools & Services for ${programKey}?`)
-                    ) {
-                      setTnsItems([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset T&amp;S
-                </button>
-
-                {/* ✅ Removed Reset T&S Log button */}
-              </div>
-
               {/* ✅ Month filter restored for Tools & Services */}
-              <div className="mt-5">
+              <div>
                 <MonthTable
-                  title="Tools & Services"
+                  title="Monthly Spend Snapshot"
                   rows={tnsMonthlyRows}
                   showMonthFilter={true}
+                  executiveSummary={true}
                 />
               </div>
 
