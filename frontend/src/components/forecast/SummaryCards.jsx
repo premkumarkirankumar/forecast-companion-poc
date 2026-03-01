@@ -82,6 +82,27 @@ function formatBeforeAfter(before, after) {
   return b === a ? `${a}` : `${b} → ${a}`;
 }
 
+function formatLogValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "object") {
+    if ("msPct" in value || "nfPct" in value) {
+      const ms = Number(value?.msPct ?? 0);
+      const nf = Number(value?.nfPct ?? 0);
+      return `MS ${ms}% / NF ${nf}%`;
+    }
+
+    try {
+      return Object.entries(value)
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(" • ");
+    } catch {
+      return "";
+    }
+  }
+
+  return String(value);
+}
+
 /**
  * Convert component onLog() payloads into AutoLog entries.
  * IMPORTANT: Do NOT require payload.kind. Your components don't send it.
@@ -96,7 +117,7 @@ function payloadToAutoDetails(payload) {
   const field = payload.field ? ` ${payload.field}` : "";
   const change =
     payload.from !== undefined || payload.to !== undefined
-      ? `: ${formatBeforeAfter(payload.from, payload.to)}`
+      ? `: ${formatBeforeAfter(formatLogValue(payload.from), formatLogValue(payload.to))}`
       : "";
 
   const out = `${name}${field}${change}`.trim();
