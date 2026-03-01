@@ -339,12 +339,20 @@ export default function ToolsServicesDetails({
     return (
         <div className="space-y-4">
             <div className={subtlePanel}>
-                <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
-                <div className="mt-1 text-xs text-gray-600">
-                    Add Tool/Service → set yearly target → edit MS by month (auto rebalances remaining months).
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
+                        <div className="mt-1 text-xs text-gray-600">
+                            Add Tool/Service → set yearly target → edit MS by month (auto rebalances remaining months).
+                        </div>
+                    </div>
+
+                    <div className="hidden sm:flex items-center gap-2 rounded-xl bg-white/60 px-3 py-2 text-xs text-gray-600 ring-1 ring-gray-100">
+                        Quarter separators at Apr / Jul / Oct
+                    </div>
                 </div>
 
-                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
+                <div className="mt-3 sm:hidden inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
                     Quarter separators at Apr / Jul / Oct
                 </div>
 

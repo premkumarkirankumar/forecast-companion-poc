@@ -161,7 +161,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   const activeSectionKey = `pfc.ui.activeSection`; // internal|tools|external
 
   // UI keys (tabs are per-program; kept for state compatibility)
-  const externalTabKey = `pfc.${programKey}.ui.externalTab`;
 
   const [actor] = useLocalStorageState(actorKey, "Neo");
 
@@ -172,7 +171,6 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
   );
 
   // Tabs (UI-only; content shows both)
-  const [, setExternalTab] = useLocalStorageState(externalTabKey, "total");
 
   /* =========================================================
      PROGRAM DATA STATE (Firestore-backed)
@@ -728,6 +726,32 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
               >
                 Reset T&amp;S
               </button>
+            ) : activeSection === "external" ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Clear saved Contractors for ${programKey}?`)) {
+                      setContractors([]);
+                    }
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                >
+                  Reset Contractors
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Clear saved SOWs for ${programKey}?`)) {
+                      setSows([]);
+                    }
+                  }}
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                >
+                  Reset SOWs
+                </button>
+              </div>
             ) : null}
           </div>
 
@@ -782,54 +806,12 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
           {/* EXTERNAL */}
           {activeSection === "external" ? (
             <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setExternalTab("total")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  External Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExternalTab("details")}
-                  className="rounded-xl px-3 py-2 text-sm font-semibold ring-1 ring-gray-200 hover:bg-gray-50"
-                >
-                  External Details
-                </button>
-
-                <div className="flex-1" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Clear saved Contractors for ${programKey}?`)) {
-                      setContractors([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset Contractors
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Clear saved SOWs for ${programKey}?`)) {
-                      setSows([]);
-                    }
-                  }}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                >
-                  Reset SOWs
-                </button>
-              </div>
-
-              <div className="mt-5">
+              <div>
                 <MonthTable
-                  title="External"
+                  title="Monthly Spend Snapshot"
                   rows={externalMonthlyRows}
                   showMonthFilter={true}
+                  executiveSummary={true}
                 />
               </div>
 
