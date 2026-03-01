@@ -1,5 +1,6 @@
 // frontend/src/components/forecast/TrendsPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { loadProgramState } from "../../data/firestorePrograms";
 import { MONTHS } from "../../data/hub";
 import { fmt } from "../../lib/forecast/format";
 
@@ -29,6 +30,10 @@ function loadBudgetMap(key) {
   const out = { ...fallback };
   for (const m of MONTHS) out[m] = Number(v?.[m] ?? 0);
   return out;
+}
+
+function emptyBudgetMap() {
+  return Object.fromEntries(MONTHS.map((m) => [m, 0]));
 }
 
 function sumByMonth(items) {
@@ -1703,7 +1708,12 @@ const PROGRAM_OPTIONS = [
   { value: "csc", label: "CSC" },
 ];
 
-export default function TrendsPage({ selectedProgram, onProgramChange, onBack }) {
+export default function TrendsPage({
+  selectedProgram,
+  onProgramChange,
+  onBack,
+  entryMode = "google",
+}) {
   const programKey = selectedProgram || "connected";
 
   // Keys (same model as SummaryCards)
@@ -1735,15 +1745,28 @@ export default function TrendsPage({ selectedProgram, onProgramChange, onBack })
 
   // Pull data live from localStorage (and refresh on app writes)
   const [snapshot, setSnapshot] = useState(() => ({
-    internal: loadArray(internalItemsKey),
-    contractors: loadArray(contractorsKey),
-    sows: loadArray(sowKey),
-    tns: loadArray(tnsItemsKey),
-    budgetByMonth: loadBudgetMap(budgetKey),
+    internal: entryMode === "local" ? [] : loadArray(internalItemsKey),
+    contractors: entryMode === "local" ? [] : loadArray(contractorsKey),
+    sows: entryMode === "local" ? [] : loadArray(sowKey),
+    tns: entryMode === "local" ? [] : loadArray(tnsItemsKey),
+    budgetByMonth: entryMode === "local" ? emptyBudgetMap() : loadBudgetMap(budgetKey),
   }));
 
   useEffect(() => {
-    function refresh() {
+    let cancelled = false;
+
+    function applySnapshot() {
+      if (entryMode === "local") {
+        setSnapshot({
+          internal: [],
+          contractors: [],
+          sows: [],
+          tns: [],
+          budgetByMonth: emptyBudgetMap(),
+        });
+        return;
+      }
+
       setSnapshot({
         internal: loadArray(internalItemsKey),
         contractors: loadArray(contractorsKey),
@@ -1753,18 +1776,42 @@ export default function TrendsPage({ selectedProgram, onProgramChange, onBack })
       });
     }
 
+    if (entryMode === "local") {
+      applySnapshot();
+      return undefined;
+    }
+
+    async function refresh() {
+      try {
+        await loadProgramState(programKey);
+      } catch (e) {
+        console.error("Failed to refresh Trends data:", e);
+      } finally {
+        if (!cancelled) applySnapshot();
+      }
+    }
+
     refresh();
 
-    window.addEventListener("pfc:storage", refresh);
-    window.addEventListener("pfc:autolog", refresh);
-    window.addEventListener("storage", refresh);
+    window.addEventListener("pfc:storage", applySnapshot);
+    window.addEventListener("pfc:autolog", applySnapshot);
+    window.addEventListener("storage", applySnapshot);
 
     return () => {
-      window.removeEventListener("pfc:storage", refresh);
-      window.removeEventListener("pfc:autolog", refresh);
-      window.removeEventListener("storage", refresh);
+      cancelled = true;
+      window.removeEventListener("pfc:storage", applySnapshot);
+      window.removeEventListener("pfc:autolog", applySnapshot);
+      window.removeEventListener("storage", applySnapshot);
     };
-  }, [internalItemsKey, contractorsKey, sowKey, tnsItemsKey, budgetKey]);
+  }, [
+    budgetKey,
+    contractorsKey,
+    entryMode,
+    internalItemsKey,
+    programKey,
+    sowKey,
+    tnsItemsKey,
+  ]);
 
   // Build monthly totals
   const contractorsRoll = useMemo(

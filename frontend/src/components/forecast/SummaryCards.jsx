@@ -724,7 +724,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 }}
                 className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
               >
-                Reset T&amp;S
+                Reset Tools &amp; Services
               </button>
             ) : activeSection === "external" ? (
               <div className="flex flex-wrap items-center justify-end gap-2">

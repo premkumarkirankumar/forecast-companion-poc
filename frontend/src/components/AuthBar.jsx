@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 
-export default function AuthBar() {
+export default function AuthBar({ onSignedOut }) {
   const [user, setUser] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,6 +27,7 @@ export default function AuthBar() {
     setBusy(true);
     try {
       await signOut(auth);
+      onSignedOut?.();
     } catch (e) {
       console.error("Sign-out failed:", e);
       alert(e?.message || "Sign-out failed");
