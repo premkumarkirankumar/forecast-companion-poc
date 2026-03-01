@@ -1745,28 +1745,17 @@ export default function TrendsPage({
 
   // Pull data live from localStorage (and refresh on app writes)
   const [snapshot, setSnapshot] = useState(() => ({
-    internal: entryMode === "local" ? [] : loadArray(internalItemsKey),
-    contractors: entryMode === "local" ? [] : loadArray(contractorsKey),
-    sows: entryMode === "local" ? [] : loadArray(sowKey),
-    tns: entryMode === "local" ? [] : loadArray(tnsItemsKey),
-    budgetByMonth: entryMode === "local" ? emptyBudgetMap() : loadBudgetMap(budgetKey),
+    internal: loadArray(internalItemsKey),
+    contractors: loadArray(contractorsKey),
+    sows: loadArray(sowKey),
+    tns: loadArray(tnsItemsKey),
+    budgetByMonth: loadBudgetMap(budgetKey),
   }));
 
   useEffect(() => {
     let cancelled = false;
 
     function applySnapshot() {
-      if (entryMode === "local") {
-        setSnapshot({
-          internal: [],
-          contractors: [],
-          sows: [],
-          tns: [],
-          budgetByMonth: emptyBudgetMap(),
-        });
-        return;
-      }
-
       setSnapshot({
         internal: loadArray(internalItemsKey),
         contractors: loadArray(contractorsKey),
@@ -1776,12 +1765,12 @@ export default function TrendsPage({
       });
     }
 
-    if (entryMode === "local") {
-      applySnapshot();
-      return undefined;
-    }
+    async function refreshIfNeeded() {
+      if (entryMode === "local") {
+        if (!cancelled) applySnapshot();
+        return;
+      }
 
-    async function refresh() {
       try {
         await loadProgramState(programKey);
       } catch (e) {
@@ -1791,7 +1780,7 @@ export default function TrendsPage({
       }
     }
 
-    refresh();
+    refreshIfNeeded();
 
     window.addEventListener("pfc:storage", applySnapshot);
     window.addEventListener("pfc:autolog", applySnapshot);

@@ -8,6 +8,7 @@ import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
 import TrendsPage from "./components/forecast/TrendsPage";
 import DataManagementPage from "./components/forecast/DataManagementPage";
 import ExecutiveOverview from "./components/forecast/ExecutiveOverview";
+import TechStackPage from "./components/forecast/TechStackPage";
 import AuthBar from "./components/AuthBar";
 import AssistantDrawer from "./components/ai/AssistantDrawer";
 import { auth, googleProvider } from "./firebase";
@@ -52,7 +53,7 @@ const seedTns = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState("dashboard"); // dashboard | executive | changelog | trends | data
+  const [page, setPage] = useState("dashboard"); // dashboard | executive | changelog | trends | techstack | data
   const [user, setUser] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [entryMode, setEntryMode] = useState(() => {
@@ -209,15 +210,11 @@ export default function App() {
         <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-10">
           <div className="rounded-[2rem] border border-white/70 bg-white/35 p-8 shadow-2xl shadow-slate-200/70 backdrop-blur-xl sm:p-12">
             <div className="max-w-4xl">
-              <div className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-5 py-2.5 text-sm font-bold uppercase tracking-[0.28em] text-gray-700 shadow-sm">
+              <div className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-6 py-3 text-base font-black uppercase tracking-[0.32em] text-gray-700 shadow-sm sm:text-lg">
                 Forecast Companion
               </div>
-              <p className="mt-8 max-w-3xl text-lg leading-8 text-gray-700 sm:text-2xl">
-                Choose a signed-in cloud session for saved collaboration, or continue in local
-                mode to work directly in the browser with the current offline-friendly flow.
-              </p>
 
-              <div className="mt-10 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   type="button"
                   disabled={authBusy}
@@ -280,8 +277,8 @@ export default function App() {
                   What You’ll Enter
                 </div>
                 <div className="mt-2 text-sm text-gray-700">
-                  Internal staffing, Tools & Services, External vendors, trends, change logs, and
-                  AI guidance remain exactly where they are after entry.
+                  Internal staffing, Tools & Services, External vendors, Trends, Change Log, and
+                  AI guidance in one shared workspace.
                 </div>
               </div>
             </div>
@@ -317,15 +314,20 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-3 py-4">
-          <DataManagementPage onBack={() => setPage("dashboard")} />
+          <DataManagementPage onBack={() => setPage("dashboard")} entryMode={entryMode} />
         </div>
       </div>
     );
   }
 
+  if (page === "techstack") {
+    return <TechStackPage onBack={() => setPage("dashboard")} entryMode={entryMode} />;
+  }
+
   if (page === "executive") {
     return (
       <ExecutiveOverview
+        entryMode={entryMode}
         selectedProgram={selectedProgram}
         onSelectProgram={setSelectedProgram}
         onContinue={() => setPage("dashboard")}
@@ -377,6 +379,13 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => setPage("techstack")}
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+            >
+              Tool Investments
+            </button>
+
+            <button
               onClick={() => setPage("changelog")}
               className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
             >
@@ -401,6 +410,7 @@ export default function App() {
           <SummaryCards
             selectedProgram={selectedProgram}
             onProgramChange={setSelectedProgram}
+            entryMode={entryMode}
           />
         ) : (
           <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />

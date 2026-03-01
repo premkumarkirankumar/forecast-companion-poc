@@ -12,7 +12,12 @@ import ToolsServicesDetails from "./ToolsServicesDetails";
 import { addAutoLogEntry } from "./autoLogStore";
 
 // ✅ Firestore helpers (shared program docs)
-import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
+import {
+  loadLocalProgramState,
+  loadProgramState,
+  saveLocalProgramState,
+  saveProgramState,
+} from "../../data/firestorePrograms";
 
 // ✅ Step 3: Excel import modal
 import ImportExcelModal from "./ImportExcelModal";
@@ -171,7 +176,7 @@ const PROGRAM_OPTIONS = [
 /* =========================================================
    Main
    ========================================================= */
-export default function SummaryCards({ selectedProgram, onProgramChange }) {
+export default function SummaryCards({ selectedProgram, onProgramChange, entryMode }) {
   const programKey = selectedProgram || "connected";
 
   // Global keys
@@ -386,7 +391,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       try {
         setIsHydrating(true);
 
-        const remoteState = await loadProgramState(programKey);
+        const remoteState =
+          entryMode === "local"
+            ? loadLocalProgramState(programKey)
+            : await loadProgramState(programKey);
 
         if (cancelled) return;
 
@@ -441,7 +449,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     return () => {
       cancelled = true;
     };
-  }, [programKey]);
+  }, [programKey, entryMode]);
 
   // ✅ Step 6C: Save program data to Firestore when data changes (debounced)
   useEffect(() => {
@@ -456,6 +464,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         tnsItems,
         tnsChangeLog,
       };
+
+      if (entryMode === "local") {
+        saveLocalProgramState(programKey, stateToSave);
+        return;
+      }
 
       saveProgramState(programKey, stateToSave).catch((e) => {
         console.error("Failed to save Firestore program state:", e);
@@ -472,6 +485,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     tnsItems,
     tnsChangeLog,
     isHydrating,
+    entryMode,
   ]);
 
   // ✅ NEW: immediate save helper for "Update" buttons in details pages
@@ -487,9 +501,13 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       tnsChangeLog,
     };
 
-    saveProgramState(programKey, stateToSave).catch((e) => {
-      console.error("Failed to save Firestore program state (commitNow):", e);
-    });
+    if (entryMode === "local") {
+      saveLocalProgramState(programKey, stateToSave);
+    } else {
+      saveProgramState(programKey, stateToSave).catch((e) => {
+        console.error("Failed to save Firestore program state (commitNow):", e);
+      });
+    }
 
     addAutoLogEntry({
       program: programKey,
@@ -878,7 +896,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
               );
 
               if (stateToSave) {
-                await saveProgramState(pk, stateToSave);
+                if (entryMode === "local") {
+                  saveLocalProgramState(pk, stateToSave);
+                } else {
+                  await saveProgramState(pk, stateToSave);
+                }
               }
               continue;
             }
@@ -891,7 +913,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
             if (!imported) continue;
 
-            const existing = (await loadProgramState(pk)) || {};
+            const existing =
+              entryMode === "local"
+                ? loadLocalProgramState(pk) || {}
+                : (await loadProgramState(pk)) || {};
 
             const merged = {
               internalLaborItems: mergeByName(
@@ -922,7 +947,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 : [],
             };
 
-            await saveProgramState(pk, merged);
+            if (entryMode === "local") {
+              saveLocalProgramState(pk, merged);
+            } else {
+              await saveProgramState(pk, merged);
+            }
           }
 
           setImportOpen(false);

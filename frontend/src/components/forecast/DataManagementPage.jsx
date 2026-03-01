@@ -2,7 +2,12 @@ import { useState } from "react";
 import ImportExcelModal from "./ImportExcelModal";
 import { downloadForecastTemplate } from "../../utils/excel/downloadForecastTemplate";
 import { exportForecastWorkbook } from "../../utils/excel/exportWorkbook";
-import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
+import {
+  loadLocalProgramState,
+  loadProgramState,
+  saveLocalProgramState,
+  saveProgramState,
+} from "../../data/firestorePrograms";
 import { MONTHS } from "../../data/hub";
 
 const PROGRAM_KEYS = ["connected", "tre", "csc"];
@@ -20,7 +25,7 @@ function adaptImportedProgramToState(p) {
   };
 }
 
-export default function DataManagementPage({ onBack }) {
+export default function DataManagementPage({ onBack, entryMode }) {
   const [importOpen, setImportOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
@@ -36,7 +41,7 @@ export default function DataManagementPage({ onBack }) {
       setIsClearing(true);
 
       for (const pk of PROGRAM_KEYS) {
-        await saveProgramState(pk, {
+        const stateToSave = {
           internalLaborItems: [],
           tnsItems: [],
           contractors: [],
@@ -44,7 +49,13 @@ export default function DataManagementPage({ onBack }) {
           externalChangeLog: [],
           tnsChangeLog: [],
           budgetByMonth: emptyBudgetByMonth,
-        });
+        };
+
+        if (entryMode === "local") {
+          saveLocalProgramState(pk, stateToSave);
+        } else {
+          await saveProgramState(pk, stateToSave);
+        }
       }
     } finally {
       setIsClearing(false);
@@ -93,7 +104,10 @@ export default function DataManagementPage({ onBack }) {
             onClick={async () => {
               const all = {};
               for (const pk of PROGRAM_KEYS) {
-                all[pk] = (await loadProgramState(pk)) || {};
+                all[pk] =
+                  entryMode === "local"
+                    ? loadLocalProgramState(pk) || {}
+                    : (await loadProgramState(pk)) || {};
               }
               exportForecastWorkbook(all, { fileName: "forecast-export.xlsx" });
             }}
@@ -153,12 +167,13 @@ export default function DataManagementPage({ onBack }) {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onApply={async (programs, meta) => {
-          const mode = meta?.mode || "replace";
+          void meta?.mode;
 
           // IMPORTANT:
           // We are not changing your business logic; we keep the same behavior:
           // Import applies and saves per program.
-          // For this page, we directly save payload into Firestore program docs.
+          // For signed-in mode, we directly save payload into Firestore program docs.
+          // For local mode, we persist the same state shape in browser storage.
           // This mirrors the effect you already have after import.
 
           for (const pk of PROGRAM_KEYS) {
@@ -167,7 +182,12 @@ export default function DataManagementPage({ onBack }) {
 
             const stateToSave = adaptImportedProgramToState(p);
             if (!stateToSave) continue;
-            await saveProgramState(pk, stateToSave);
+
+            if (entryMode === "local") {
+              saveLocalProgramState(pk, stateToSave);
+            } else {
+              await saveProgramState(pk, stateToSave);
+            }
           }
 
           setImportOpen(false);

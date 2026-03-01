@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { loadProgramState } from "../../data/firestorePrograms";
+import { loadLocalProgramState, loadProgramState } from "../../data/firestorePrograms";
 import { MONTHS } from "../../data/hub";
 
 const PROGRAMS = [
@@ -86,6 +86,7 @@ function MetricTile({ label, value, sub, footer, tone = "default" }) {
 }
 
 export default function ExecutiveOverview({
+  entryMode = "google",
   selectedProgram,
   onSelectProgram,
   onContinue,
@@ -105,7 +106,10 @@ export default function ExecutiveOverview({
         const entries = await Promise.all(
           PROGRAMS.map(async ({ id }) => {
             try {
-              const state = await loadProgramState(id);
+              const state =
+                entryMode === "local"
+                  ? loadLocalProgramState(id)
+                  : await loadProgramState(id);
               return [id, state || {}];
             } catch (e) {
               console.error(`Failed to load executive summary for ${id}:`, e);
@@ -131,7 +135,7 @@ export default function ExecutiveOverview({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [entryMode]);
 
   const summaries = useMemo(() => {
     return PROGRAMS.map((program) => ({

@@ -3,20 +3,37 @@ import { db } from "../firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { MONTHS } from "./hub";
 
+const safeArray = (v) => (Array.isArray(v) ? v : []);
+const safeBudgetMap = (v) => {
+  const fallback = Object.fromEntries(MONTHS.map((m) => [m, 0]));
+  if (!v || typeof v !== "object") return fallback;
+
+  const out = { ...fallback };
+  for (const m of MONTHS) out[m] = Number(v?.[m] ?? 0);
+  return out;
+};
+
+function getLocalStateKey(programId) {
+  return `pfc.${programId}.state.local`;
+}
+
+function normalizeLocalState(state) {
+  const safeState = state && typeof state === "object" ? state : {};
+  return {
+    internalLaborItems: safeArray(safeState.internalLaborItems),
+    contractors: safeArray(safeState.contractors),
+    sows: safeArray(safeState.sows),
+    externalChangeLog: safeArray(safeState.externalChangeLog),
+    tnsItems: safeArray(safeState.tnsItems),
+    tnsChangeLog: safeArray(safeState.tnsChangeLog),
+    budgetByMonth: safeBudgetMap(safeState.budgetByMonth),
+  };
+}
+
 // TrendsPage reads these localStorage keys today.
 // We mirror Firestore program state into these keys to keep Trends working unchanged.
 function mirrorToLocalStorage(programId, state) {
   if (!programId || !state) return;
-
-  const safeArray = (v) => (Array.isArray(v) ? v : []);
-  const safeBudgetMap = (v) => {
-    const fallback = Object.fromEntries(MONTHS.map((m) => [m, 0]));
-    if (!v || typeof v !== "object") return fallback;
-
-    const out = { ...fallback };
-    for (const m of MONTHS) out[m] = Number(v?.[m] ?? 0);
-    return out;
-  };
 
   const mappings = [
     [`pfc.${programId}.internal.labor.items`, safeArray(state.internalLaborItems)],
@@ -34,6 +51,33 @@ function mirrorToLocalStorage(programId, state) {
       // ignore localStorage failures (quota, privacy mode, etc.)
     }
   }
+}
+
+export function loadLocalProgramState(programId) {
+  try {
+    const raw = localStorage.getItem(getLocalStateKey(programId));
+    if (!raw) return null;
+    return normalizeLocalState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function saveLocalProgramState(programId, state) {
+  const existing = loadLocalProgramState(programId) || {};
+  const mergedState = normalizeLocalState({ ...existing, ...(state || {}) });
+
+  try {
+    localStorage.setItem(getLocalStateKey(programId), JSON.stringify(mergedState));
+    window.dispatchEvent(
+      new CustomEvent("pfc:storage", { detail: { key: getLocalStateKey(programId) } })
+    );
+  } catch {
+    // ignore localStorage failures (quota, privacy mode, etc.)
+  }
+
+  mirrorToLocalStorage(programId, mergedState);
+  return mergedState;
 }
 
 /**
