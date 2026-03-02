@@ -1762,11 +1762,13 @@ export default function TrendsPage({
   const sowKey = `pfc.${programKey}.external.sow`;
   const tnsItemsKey = `pfc.${programKey}.tns.items`;
   const budgetKey = `pfc.${programKey}.budget.byMonth`;
+  const actualsKey = `pfc.${programKey}.actuals.byMonth`;
 
   // Month range (local to this page)
   const [startIdx, setStartIdx] = useState(0);
   const [endIdx, setEndIdx] = useState(MONTHS.length - 1);
   const [activeTrend, setActiveTrend] = useState("projection");
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
   const normalized = useMemo(() => {
     const s = clamp(Number(startIdx), 0, MONTHS.length - 1);
@@ -1791,6 +1793,7 @@ export default function TrendsPage({
     sows: loadArray(sowKey),
     tns: loadArray(tnsItemsKey),
     budgetByMonth: loadBudgetMap(budgetKey),
+    actualsByMonth: loadBudgetMap(actualsKey),
   }));
 
   useEffect(() => {
@@ -1803,7 +1806,9 @@ export default function TrendsPage({
         sows: loadArray(sowKey),
         tns: loadArray(tnsItemsKey),
         budgetByMonth: loadBudgetMap(budgetKey),
+        actualsByMonth: loadBudgetMap(actualsKey),
       });
+      setLastRefreshedAt(new Date());
     }
 
     async function refreshIfNeeded() {
@@ -1835,6 +1840,7 @@ export default function TrendsPage({
     };
   }, [
     budgetKey,
+    actualsKey,
     contractorsKey,
     entryMode,
     internalItemsKey,
@@ -1916,14 +1922,21 @@ export default function TrendsPage({
     return Array.isArray(snapshot.internal) ? snapshot.internal.length : 0;
   }, [snapshot.internal]);
 
+  const refreshedLabel = lastRefreshedAt
+    ? lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : "";
+  const loading = !lastRefreshedAt;
+
 
  // Budget input (optional)
   const [budgetDraft, setBudgetDraft] = useState(() => snapshot.budgetByMonth);
+  const [actualsDraft, setActualsDraft] = useState(() => snapshot.actualsByMonth);
 
   useEffect(() => {
     // keep draft in sync when program changes / storage changes
     setBudgetDraft(snapshot.budgetByMonth);
-  }, [snapshot.budgetByMonth]);
+    setActualsDraft(snapshot.actualsByMonth);
+  }, [snapshot.actualsByMonth, snapshot.budgetByMonth]);
 
   async function saveBudget(nextMap) {
     localStorage.setItem(budgetKey, JSON.stringify(nextMap));
@@ -1953,6 +1966,36 @@ export default function TrendsPage({
     const next = Object.fromEntries(MONTHS.map((m) => [m, perMonth]));
     setBudgetDraft(next);
     saveBudget(next);
+  }
+
+  async function saveActuals(nextMap) {
+    localStorage.setItem(actualsKey, JSON.stringify(nextMap));
+    window.dispatchEvent(new Event("pfc:storage"));
+
+    if (entryMode === "local") return;
+
+    try {
+      await saveProgramState(programKey, { actualsByMonth: nextMap });
+    } catch (e) {
+      console.error("Failed to save actuals:", e);
+    }
+  }
+
+  function setActualsForMonth(m, value) {
+    const next = { ...actualsDraft, [m]: Number(value ?? 0) };
+    setActualsDraft(next);
+  }
+
+  function applyActualsDraft() {
+    saveActuals(actualsDraft);
+  }
+
+  function setAnnualActualsEvenly(annual) {
+    const n = Number(annual ?? 0);
+    const perMonth = n / 12;
+    const next = Object.fromEntries(MONTHS.map((m) => [m, perMonth]));
+    setActualsDraft(next);
+    saveActuals(next);
   }
 
 
@@ -2135,8 +2178,15 @@ export default function TrendsPage({
 
     // Variance vs Budget (actual vs target)
   const variance = useMemo(() => {
+    const hasActuals = MONTHS.some((m) => Number(snapshot.actualsByMonth?.[m] ?? 0) > 0);
+
     const actual = Object.fromEntries(
-      MONTHS.map((m) => [m, Number(byMonth?.[m]?.total ?? 0)])
+      MONTHS.map((m) => [
+        m,
+        hasActuals
+          ? Number(snapshot.actualsByMonth?.[m] ?? 0)
+          : Number(byMonth?.[m]?.total ?? 0),
+      ])
     );
 
     const budget = Object.fromEntries(
@@ -2182,7 +2232,7 @@ export default function TrendsPage({
         diffPct: diffPctSel,
       },
     };
-  }, [byMonth, snapshot.budgetByMonth, visibleMonths]);
+  }, [byMonth, snapshot.actualsByMonth, snapshot.budgetByMonth, visibleMonths]);
 
   // Cumulative burn curve (actual + optional budget)
   const burnCurve = useMemo(() => {
@@ -2193,7 +2243,10 @@ export default function TrendsPage({
     let b = 0;
 
     for (const m of MONTHS) {
-      a += Number(byMonth?.[m]?.total ?? 0);
+      const actualValue = MONTHS.some((x) => Number(snapshot.actualsByMonth?.[x] ?? 0) > 0)
+        ? Number(snapshot.actualsByMonth?.[m] ?? 0)
+        : Number(byMonth?.[m]?.total ?? 0);
+      a += actualValue;
       actualCum[m] = a;
 
       // budget is optional; if not set, it stays 0
@@ -2202,7 +2255,7 @@ export default function TrendsPage({
     }
 
     return { actualCum, budgetCum };
-  }, [byMonth, snapshot.budgetByMonth]);
+  }, [byMonth, snapshot.actualsByMonth, snapshot.budgetByMonth]);
   
   
   // Spend momentum (Δ month-over-month)
@@ -2390,7 +2443,10 @@ export default function TrendsPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm">
+              {loading ? "Refreshing..." : `Data as of ${refreshedLabel}`}
+            </div>
             <button
               type="button"
               onClick={onBack}
@@ -2530,9 +2586,16 @@ export default function TrendsPage({
             <TrendNavCard
               title="Variance vs budget"
               summary={`Variance ${fmt(variance.selected?.diff ?? 0)} across selected months`}
-              meta="Includes budget inputs"
+              meta="Compares actuals to budget"
               active={activeTrend === "variance"}
               onClick={() => setActiveTrend("variance")}
+            />
+            <TrendNavCard
+              title="Budget & actuals inputs"
+              summary="Manage monthly actuals and budget entries"
+              meta="Updates variance and burn views"
+              active={activeTrend === "inputs"}
+              onClick={() => setActiveTrend("inputs")}
             />
             <TrendNavCard
               title="Cumulative burn curve"
@@ -2622,15 +2685,73 @@ export default function TrendsPage({
           ) : null}
 
           {activeTrend === "variance" ? (
-            <div className="space-y-5">
-              <BudgetVarianceChart
-                months={visibleMonths}
-                actualByMonth={variance.actual}
-                budgetByMonth={variance.budget}
-                diffByMonth={variance.diff}
-                cumDiffByMonth={variance.cumDiff}
-                selected={variance.selected}
-              />
+            <BudgetVarianceChart
+              months={visibleMonths}
+              actualByMonth={variance.actual}
+              budgetByMonth={variance.budget}
+              diffByMonth={variance.diff}
+              cumDiffByMonth={variance.cumDiff}
+              selected={variance.selected}
+            />
+          ) : null}
+
+          {activeTrend === "inputs" ? (
+            <div className="grid gap-5 xl:grid-cols-2">
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-extrabold text-gray-900">
+                      Actuals inputs
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-gray-500">
+                      Enter monthly actuals used in variance and cumulative burn views.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAnnualActualsEvenly(prompt("Enter annual actuals") || 0)}
+                      className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+                    >
+                      Set annual (even split)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyActualsDraft}
+                      className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                    >
+                      Save actuals
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-[420px] w-full text-left">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Month</th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Actuals</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {MONTHS.map((m) => (
+                        <tr key={`actual-${m}`}>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">{m}</td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={Number(actualsDraft?.[m] ?? 0)}
+                              onChange={(e) => setActualsForMonth(m, e.target.value)}
+                              className="w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               <div className="rounded-2xl border bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2639,7 +2760,7 @@ export default function TrendsPage({
                       Budget inputs
                     </div>
                     <div className="mt-1 text-xs font-semibold text-gray-500">
-                      Optional monthly target entry for the variance view.
+                      Enter monthly budget targets for the variance and burn comparison views.
                     </div>
                   </div>
 
@@ -2662,23 +2783,17 @@ export default function TrendsPage({
                 </div>
 
                 <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-[760px] w-full text-left">
+                  <table className="min-w-[420px] w-full text-left">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                          Month
-                        </th>
-                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                          Budget
-                        </th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Month</th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Budget</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {MONTHS.map((m) => (
-                        <tr key={m}>
-                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                            {m}
-                          </td>
+                        <tr key={`budget-${m}`}>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">{m}</td>
                           <td className="px-4 py-3">
                             <input
                               type="number"

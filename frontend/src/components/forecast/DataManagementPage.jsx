@@ -166,10 +166,10 @@ export default function DataManagementPage({ onBack, entryMode }) {
               <div className="mt-1 text-sm font-semibold text-slate-700">
                 Build a landscape leadership report across Connected, TRE, and CSC with
                 executive metrics, program snapshots, workforce coverage, delivery posture, and
-                budget variance for review.
+                budget and actuals variance for review.
               </div>
               <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-                Downloads a print-ready report file directly from the browser
+                Downloads the styled HTML report directly from the browser
               </div>
             </div>
 

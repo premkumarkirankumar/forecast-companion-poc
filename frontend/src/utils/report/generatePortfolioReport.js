@@ -78,9 +78,10 @@ function summarizeProgram(programKey, state) {
   const tools = Array.isArray(state?.tnsItems) ? state.tnsItems : [];
   const contractors = Array.isArray(state?.contractors) ? state.contractors : [];
   const sows = Array.isArray(state?.sows) ? state.sows : [];
-  const budgetByMonth = state?.budgetByMonth && typeof state.budgetByMonth === "object"
-    ? state.budgetByMonth
-    : {};
+  const budgetByMonth =
+    state?.budgetByMonth && typeof state.budgetByMonth === "object"
+      ? state.budgetByMonth
+      : {};
 
   const internalCount = internal.length;
   const avgRun = internalCount
@@ -125,8 +126,8 @@ function summarizeProgram(programKey, state) {
     totalDevelopers === 0 && totalQa === 0
       ? "0 : 0"
       : totalQa === 0
-      ? `${totalDevelopers.toFixed(1)} : 0`
-      : `${(totalDevelopers / totalQa).toFixed(1)} : 1`;
+        ? `${totalDevelopers.toFixed(1)} : 0`
+        : `${(totalDevelopers / totalQa).toFixed(1)} : 1`;
   const toolNames = tools
     .slice()
     .sort((a, b) => moneyFromTool(b) - moneyFromTool(a))
@@ -169,13 +170,15 @@ function buildStrategicSummary(programs) {
   const totalQa = programs.reduce((sum, p) => sum + p.totalQa, 0);
 
   const topProgram = programs.slice().sort((a, b) => b.trackedSpend - a.trackedSpend)[0];
-  const highestExternal = programs.slice().sort((a, b) => b.externalReliance - a.externalReliance)[0];
+  const highestExternal = programs
+    .slice()
+    .sort((a, b) => b.externalReliance - a.externalReliance)[0];
   const ratio =
     totalDevelopers === 0 && totalQa === 0
       ? "0 : 0"
       : totalQa === 0
-      ? `${totalDevelopers.toFixed(1)} : 0`
-      : `${(totalDevelopers / totalQa).toFixed(1)} : 1`;
+        ? `${totalDevelopers.toFixed(1)} : 0`
+        : `${(totalDevelopers / totalQa).toFixed(1)} : 1`;
 
   return {
     totalTracked,
@@ -220,7 +223,9 @@ function buildReportHtml(allStates) {
             <div class="card compact">
               <div class="label">Internal FTE</div>
               <div class="value">${program.internalCount}</div>
-              <div class="sub">Run ${fmtPct(program.avgRun)} • Growth ${fmtPct(program.avgGrowth)}</div>
+              <div class="sub">Run ${fmtPct(program.avgRun)} • Growth ${fmtPct(
+                program.avgGrowth
+              )}</div>
             </div>
             <div class="card compact">
               <div class="label">Tool spend</div>
@@ -256,8 +261,8 @@ function buildReportHtml(allStates) {
                     program.externalReliance >= 75
                       ? "Delivery is materially weighted toward external execution."
                       : program.externalReliance >= 50
-                      ? "External delivery remains meaningful and should be monitored."
-                      : "Internal and external balance remains comparatively stable."
+                        ? "External delivery remains meaningful and should be monitored."
+                        : "Internal and external balance remains comparatively stable."
                   }</td>
                 </tr>
                 <tr>
@@ -267,8 +272,8 @@ function buildReportHtml(allStates) {
                     program.variance > 0
                       ? "Tracked spend is running above the current plan."
                       : program.variance < 0
-                      ? "Tracked spend is currently below the saved budget."
-                      : "Tracked spend is aligned to the saved budget."
+                        ? "Tracked spend is currently below the saved budget."
+                        : "Tracked spend is aligned to the saved budget."
                   }</td>
                 </tr>
                 <tr>
@@ -504,7 +509,9 @@ function buildReportHtml(allStates) {
                 <div class="pill-row">
                   <span class="pill">Dev-to-QA ${escapeHtml(strategic.ratio)}</span>
                   <span class="pill orange">Highest external reliance ${
-                    strategic.highestExternal ? escapeHtml(strategic.highestExternal.name) : "N/A"
+                    strategic.highestExternal
+                      ? escapeHtml(strategic.highestExternal.name)
+                      : "N/A"
                   }</span>
                   <span class="pill green">Leadership-ready summary</span>
                 </div>

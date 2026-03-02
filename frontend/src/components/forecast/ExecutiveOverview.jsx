@@ -191,6 +191,7 @@ export default function ExecutiveOverview({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statesByProgram, setStatesByProgram] = useState({});
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [insightError, setInsightError] = useState("");
   const [generatedInsight, setGeneratedInsight] = useState(null);
@@ -221,6 +222,7 @@ export default function ExecutiveOverview({
 
         if (!cancelled) {
           setStatesByProgram(Object.fromEntries(entries));
+          setLastRefreshedAt(new Date());
         }
       } catch (e) {
         console.error("Failed to load executive overview:", e);
@@ -332,6 +334,44 @@ export default function ExecutiveOverview({
     }
     return watchouts.slice(0, 2);
   }, [portfolio]);
+
+  const assumptionSummary = useMemo(() => {
+    const externalShare =
+      portfolio.totalForecast > 0
+        ? Math.round((portfolio.externalTotal / portfolio.totalForecast) * 100)
+        : 0;
+    const toolsShare =
+      portfolio.totalForecast > 0
+        ? Math.round((portfolio.toolsTotal / portfolio.totalForecast) * 100)
+        : 0;
+
+    return [
+      {
+        label: "Delivery Mix",
+        value: `${externalShare}% external`,
+        sub: "Current tracked spend weighted toward external delivery",
+      },
+      {
+        label: "Internal Assumption",
+        value: `${portfolio.avgRunPct}% run / ${portfolio.avgGrowPct}% grow`,
+        sub: "Current staffing posture across named FTE entries",
+      },
+      {
+        label: "Recurring Spend",
+        value: `${toolsShare}% tools`,
+        sub: "Share of tracked spend in recurring tools and services",
+      },
+      {
+        label: "Programs in Scope",
+        value: `${PROGRAMS.length}`,
+        sub: "Connected, TRE, and CSC are included in this portfolio view",
+      },
+    ];
+  }, [portfolio]);
+
+  const refreshedLabel = lastRefreshedAt
+    ? lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : "";
 
   useEffect(() => {
     if (!insightBody) {
@@ -522,6 +562,44 @@ export default function ExecutiveOverview({
             </div>
           </div>
 
+          <div className="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Assumption Summary
+                </div>
+                <div className="mt-1 text-sm font-semibold text-gray-900">
+                  Key assumptions currently shaping the saved forecast posture
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                  {entryMode === "local" ? "Local mode data" : "Latest saved cloud data"}
+                </div>
+                <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
+                  {loading ? "Refreshing..." : `Data as of ${refreshedLabel}`}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {assumptionSummary.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3"
+                >
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    {item.label}
+                  </div>
+                  <div className="mt-1 text-lg font-black tracking-tight text-gray-950">
+                    {item.value}
+                  </div>
+                  <div className="mt-1 text-xs font-medium text-gray-600">{item.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-8 grid gap-4 lg:grid-cols-3">
             {summaries.map((program) => {
               const active = selectedProgram === program.id;
@@ -610,8 +688,15 @@ export default function ExecutiveOverview({
             </div>
 
             <div className="mt-5 rounded-2xl border border-white bg-white px-5 py-5 shadow-sm">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                Insight Output
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Insight Output
+                </div>
+                <div className="text-xs font-semibold text-gray-500">
+                  {entryMode === "local"
+                    ? "Local deterministic summary"
+                    : "Generated from the latest saved cloud data for Connected, TRE, and CSC"}
+                </div>
               </div>
               {insightLoading ? (
                 <div className="mt-4 min-h-[180px] text-base leading-7 text-gray-700">
