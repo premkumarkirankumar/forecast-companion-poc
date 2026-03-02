@@ -117,6 +117,17 @@ function parseInsightPreview(text) {
   return { headline, sections };
 }
 
+function softenInsightHeadline(headline) {
+  const raw = String(headline || "").trim();
+  if (!raw) return "";
+  if (/^At Risk portfolio signal$/i.test(raw)) return "Priority planning signal";
+  if (/^Priority portfolio signal$/i.test(raw)) return "Priority planning signal";
+  if (/^Watch portfolio signal$/i.test(raw)) return "Planning watch signal";
+  if (/^Healthy portfolio signal$/i.test(raw)) return "Stable planning signal";
+  if (/^Stable portfolio signal$/i.test(raw)) return "Stable planning signal";
+  return raw;
+}
+
 function MetricTile({ label, value, sub, footer, tone = "default" }) {
   const toneClass =
     tone === "primary"
@@ -144,12 +155,12 @@ function buildLocalFallbackInsight(portfolio, summaries) {
   const externalLeader = portfolio?.externalLeader?.program;
   const riskLevel =
     (portfolio?.externalLeader?.ratio ?? 0) >= 0.75
-      ? "At Risk"
+      ? "Priority"
       : (portfolio?.externalLeader?.ratio ?? 0) >= 0.6
         ? "Watch"
-        : "Healthy";
+        : "Stable";
 
-  const headline = `${riskLevel} portfolio signal`;
+  const headline = `${riskLevel} planning signal`;
   const overview = topProgram
     ? `${topProgram.label} currently carries the largest tracked spend at ${fmtCurrency(
         topProgram.summary.totalForecast
@@ -344,6 +355,8 @@ export default function ExecutiveOverview({
       portfolio.totalForecast > 0
         ? Math.round((portfolio.toolsTotal / portfolio.totalForecast) * 100)
         : 0;
+    const topProgramAmount = portfolio?.topProgram?.summary?.totalForecast || 0;
+    const watchRatio = Math.round((portfolio?.externalLeader?.ratio ?? 0) * 100);
 
     return [
       {
@@ -352,9 +365,11 @@ export default function ExecutiveOverview({
         sub: "Current tracked spend weighted toward external delivery",
       },
       {
-        label: "Internal Assumption",
-        value: `${portfolio.avgRunPct}% run / ${portfolio.avgGrowPct}% grow`,
-        sub: "Current staffing posture across named FTE entries",
+        label: "Top Cost Program",
+        value: portfolio?.topProgram?.label || "Not available",
+        sub: topProgramAmount
+          ? `${fmtCurrency(topProgramAmount)} currently leads tracked spend`
+          : "No saved tracked spend available yet",
       },
       {
         label: "Recurring Spend",
@@ -362,9 +377,12 @@ export default function ExecutiveOverview({
         sub: "Share of tracked spend in recurring tools and services",
       },
       {
-        label: "Programs in Scope",
-        value: `${PROGRAMS.length}`,
-        sub: "Connected, TRE, and CSC are included in this portfolio view",
+        label: "Delivery Watchpoint",
+        value: portfolio?.externalLeader?.program?.label || "Balanced mix",
+        sub:
+          watchRatio > 0
+            ? `${watchRatio}% external weighting in the most delivery-sensitive program`
+            : "No external weighting signal is available yet",
       },
     ];
   }, [portfolio]);
@@ -436,7 +454,7 @@ export default function ExecutiveOverview({
                 Executive Overview
               </div>
               <div className="mt-2 text-4xl font-black tracking-tight text-gray-950">
-                Portfolio forecast summary
+                Program forecast summary
               </div>
               <div className="mt-3 max-w-3xl text-sm leading-7 text-gray-600 sm:text-base">
                 Review the latest saved outlook across Connected, TRE, and CSC before entering the
@@ -566,7 +584,7 @@ export default function ExecutiveOverview({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  Assumption Summary
+                  Planning Assumptions
                 </div>
                 <div className="mt-1 text-sm font-semibold text-gray-900">
                   Key assumptions currently shaping the saved forecast posture
@@ -665,10 +683,10 @@ export default function ExecutiveOverview({
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Portfolio Focus Summary
+                  Forecast Review Summary
                 </div>
                 <div className="mt-2 text-lg font-bold text-gray-900">
-                  Generated from the latest saved portfolio metrics
+                  Built from the latest saved program metrics
                 </div>
               </div>
               <button
@@ -706,7 +724,7 @@ export default function ExecutiveOverview({
               ) : parsedInsight.headline ? (
                 <div className="mt-4 min-h-[180px]">
                   <div className="text-[2rem] font-black tracking-tight text-gray-950">
-                    {parsedInsight.headline}
+                    {softenInsightHeadline(parsedInsight.headline)}
                   </div>
                   <div className="mt-4 space-y-4">
                     {parsedInsight.sections.map((section) => (
