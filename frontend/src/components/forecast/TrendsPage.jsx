@@ -133,6 +133,46 @@ function InsightCard({ title, sub, items, whyDetails }) {
   );
 }
 
+function TrendNavCard({ title, summary, meta, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all",
+        "hover:-translate-y-0.5 hover:shadow-md",
+        active
+          ? "border-gray-900 ring-2 ring-gray-900/10"
+          : "border-gray-200 hover:border-gray-300",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-extrabold text-gray-900">{title}</div>
+          <div className="mt-1 text-sm font-semibold text-gray-600">
+            {summary}
+          </div>
+        </div>
+        <span
+          className={[
+            "inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-extrabold transition-transform",
+            active
+              ? "border-gray-900 bg-gray-900 text-white rotate-180"
+              : "border-gray-200 bg-gray-50 text-gray-700",
+          ].join(" ")}
+        >
+          ▾
+        </span>
+      </div>
+      {meta ? (
+        <div className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+          {meta}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
 /* -----------------------------
    SVG Charts (no deps)
 ------------------------------ */
@@ -1726,6 +1766,7 @@ export default function TrendsPage({
   // Month range (local to this page)
   const [startIdx, setStartIdx] = useState(0);
   const [endIdx, setEndIdx] = useState(MONTHS.length - 1);
+  const [activeTrend, setActiveTrend] = useState("projection");
 
   const normalized = useMemo(() => {
     const s = clamp(Number(startIdx), 0, MONTHS.length - 1);
@@ -2447,216 +2488,312 @@ export default function TrendsPage({
           />
         </div>
 
-        {/* What changed this month? */}
-        <div className="mt-6">
-          <InsightCard
-            title="Biggest spike/drop in selected range"
-            sub={viewLabel}   // this already changes with your slider
-            items={whatChanged.insights}
-            whyDetails={whatChanged.whyDetails}
-          />
-        </div>
-
-        {/* Run rate forecast projection (year-end) */}
-        <div className="mt-6">
-          <RunRateProjectionChart
-            monthsAll={MONTHS}
-            visibleMonths={visibleMonths}
-            actualCumByMonth={runRateProjection.actualCum}
-            projCumByMonth={runRateProjection.projCum}
-            lowCumByMonth={runRateProjection.lowCum}
-            highCumByMonth={runRateProjection.highCum}
-            yearEnd={runRateProjection.yearEnd}
-          />
-        </div>
-
-        {/* Spend acceleration (Δ MoM) */}
-        <div className="mt-6">
-          <SpendMomentumChart
-            months={visibleMonths}
-            dTotalByMonth={spendDelta.dTotal}
-            dMsByMonth={spendDelta.dMs}
-            dNfByMonth={spendDelta.dNf}
-          />
-        </div>
-
-        {/* Variance vs Budget */}
-        <div className="mt-6">
-          <BudgetVarianceChart
-            months={visibleMonths}
-            actualByMonth={variance.actual}
-            budgetByMonth={variance.budget}
-            diffByMonth={variance.diff}
-            cumDiffByMonth={variance.cumDiff}
-            selected={variance.selected}
-          />
-        </div>
-
-         {/* Budget (optional) */}
-        <div className="mt-5 rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-extrabold text-gray-900">
-                Budget (optional)
-              </div>
-              <div className="mt-1 text-xs font-semibold text-gray-500">
-                Enter an annual budget (even split), or adjust months below.
-                Stored in localStorage per program.
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setAnnualBudgetEvenly(prompt("Enter annual budget") || 0)}
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-              >
-                Set annual (even split)
-              </button>
-              <button
-                type="button"
-                onClick={applyBudgetDraft}
-                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-              >
-                Save budget
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[760px] w-full text-left">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Month
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Budget
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {MONTHS.map((m) => (
-                  <tr key={m}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {m}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="number"
-                        value={Number(budgetDraft?.[m] ?? 0)}
-                        onChange={(e) => setBudgetForMonth(m, e.target.value)}
-                        className="w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        
-        {/* Cumulative burn curve (bottom) */}
-        <div className="mt-6">
-          <CumulativeBurnCurve
-            monthsAll={MONTHS}
-            visibleMonths={visibleMonths}
-            actualCumByMonth={burnCurve.actualCum}
-            budgetCumByMonth={burnCurve.budgetCum}
-          />
-        </div>
-
-        {/* MS vs NF ratio drift (% over time) */}
-        <div className="mt-6">
-          <SplitDriftChart
-            months={visibleMonths}
-            msPctByMonth={splitPct.msPct}
-            nfPctByMonth={splitPct.nfPct}
-          />
-        </div>
-
-        {/* Stacked monthly spend */}
-        <div className="mt-6">
-          <StackedBars months={visibleMonths} series={stackedSeries} />
-        </div>
-
-        {/* MS vs NF line */}
-        <div className="mt-6">
-          <TwoLineChart
-            months={visibleMonths}
-            msByMonth={msByMonth}
-            nfByMonth={nfByMonth}
-          />
-        </div>
-
-        {/* Top contributors table */}
         <div className="mt-6 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-extrabold text-gray-900">
-                Top contributors
-              </div>
+              <div className="text-sm font-extrabold text-gray-900">Trend Views</div>
               <div className="mt-0.5 text-xs font-semibold text-gray-500">
-                Totals across selected months
+                Open one trend at a time for a cleaner executive review.
               </div>
             </div>
           </div>
 
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-[760px] w-full text-left">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Category
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Total
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Avg / Month
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    % of Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {contributors.map((r) => (
-                  <tr key={r.label}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {r.label}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                      {fmt(r.total)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {fmt(r.avgPerMonth)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      {pct(r.pctOfTotal)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    Grand Total
-                  </td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    {fmt(sums.grandTotal)}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    {fmt(sums.runRate)}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    100%
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <TrendNavCard
+              title="Tracked spend projection"
+              summary={`${fmt(runRateProjection.yearEnd.projected)} projected tracked spend`}
+              meta={`Band ${fmt(runRateProjection.yearEnd.low)} – ${fmt(
+                runRateProjection.yearEnd.high
+              )}`}
+              active={activeTrend === "projection"}
+              onClick={() => setActiveTrend("projection")}
+            />
+            <TrendNavCard
+              title="Biggest spike/drop"
+              summary={
+                whatChanged.insights?.[0] ||
+                "Review the largest month-over-month movement in the selected range."
+              }
+              meta={viewLabel}
+              active={activeTrend === "spike"}
+              onClick={() => setActiveTrend("spike")}
+            />
+            <TrendNavCard
+              title="Spend acceleration"
+              summary={`Latest visible delta ${fmt(
+                Number(spendDelta.dTotal?.[visibleMonths[visibleMonths.length - 1]] ?? 0)
+              )}`}
+              meta="Month-over-month change"
+              active={activeTrend === "acceleration"}
+              onClick={() => setActiveTrend("acceleration")}
+            />
+            <TrendNavCard
+              title="Variance vs budget"
+              summary={`Variance ${fmt(variance.selected?.diff ?? 0)} across selected months`}
+              meta="Includes budget inputs"
+              active={activeTrend === "variance"}
+              onClick={() => setActiveTrend("variance")}
+            />
+            <TrendNavCard
+              title="Cumulative burn curve"
+              summary={`${fmt(
+                Number(
+                  burnCurve.actualCum?.[
+                    visibleMonths[visibleMonths.length - 1] || MONTHS[MONTHS.length - 1]
+                  ] ?? 0
+                )
+              )} cumulative`}
+              meta="Actual vs optional budget"
+              active={activeTrend === "burn"}
+              onClick={() => setActiveTrend("burn")}
+            />
+            <TrendNavCard
+              title="MS vs NF ratio drift"
+              summary={`${pct(
+                splitPct.msPct?.[
+                  visibleMonths[visibleMonths.length - 1] || MONTHS[MONTHS.length - 1]
+                ] ?? 0
+              )} MS • ${pct(
+                splitPct.nfPct?.[
+                  visibleMonths[visibleMonths.length - 1] || MONTHS[MONTHS.length - 1]
+                ] ?? 0
+              )} NF`}
+              meta="Mix shift over time"
+              active={activeTrend === "drift"}
+              onClick={() => setActiveTrend("drift")}
+            />
+            <TrendNavCard
+              title="Monthly tracked spend"
+              summary={`${visibleMonths.length} visible months stacked by source`}
+              meta="Tools + External"
+              active={activeTrend === "monthly"}
+              onClick={() => setActiveTrend("monthly")}
+            />
+            <TrendNavCard
+              title="MS vs NF over time"
+              summary={`${pct(msShare)} MS • ${pct(nfShare)} NF in range`}
+              meta="Monthly line comparison"
+              active={activeTrend === "split"}
+              onClick={() => setActiveTrend("split")}
+            />
+            <TrendNavCard
+              title="Top contributors"
+              summary={
+                contributors[0]
+                  ? `${contributors[0].label} leads the selected range`
+                  : "Contribution ranking"
+              }
+              meta={contributors[0] ? fmt(contributors[0].total) : "No data"}
+              active={activeTrend === "contributors"}
+              onClick={() => setActiveTrend("contributors")}
+            />
           </div>
+        </div>
+
+        <div className="mt-6">
+          {activeTrend === "projection" ? (
+            <RunRateProjectionChart
+              monthsAll={MONTHS}
+              visibleMonths={visibleMonths}
+              actualCumByMonth={runRateProjection.actualCum}
+              projCumByMonth={runRateProjection.projCum}
+              lowCumByMonth={runRateProjection.lowCum}
+              highCumByMonth={runRateProjection.highCum}
+              yearEnd={runRateProjection.yearEnd}
+            />
+          ) : null}
+
+          {activeTrend === "spike" ? (
+            <InsightCard
+              title="Biggest spike/drop in selected range"
+              sub={viewLabel}
+              items={whatChanged.insights}
+              whyDetails={whatChanged.whyDetails}
+            />
+          ) : null}
+
+          {activeTrend === "acceleration" ? (
+            <SpendMomentumChart
+              months={visibleMonths}
+              dTotalByMonth={spendDelta.dTotal}
+              dMsByMonth={spendDelta.dMs}
+              dNfByMonth={spendDelta.dNf}
+            />
+          ) : null}
+
+          {activeTrend === "variance" ? (
+            <div className="space-y-5">
+              <BudgetVarianceChart
+                months={visibleMonths}
+                actualByMonth={variance.actual}
+                budgetByMonth={variance.budget}
+                diffByMonth={variance.diff}
+                cumDiffByMonth={variance.cumDiff}
+                selected={variance.selected}
+              />
+
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-extrabold text-gray-900">
+                      Budget inputs
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-gray-500">
+                      Optional monthly target entry for the variance view.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAnnualBudgetEvenly(prompt("Enter annual budget") || 0)}
+                      className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+                    >
+                      Set annual (even split)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyBudgetDraft}
+                      className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                    >
+                      Save budget
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-[760px] w-full text-left">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                          Month
+                        </th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                          Budget
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {MONTHS.map((m) => (
+                        <tr key={m}>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                            {m}
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={Number(budgetDraft?.[m] ?? 0)}
+                              onChange={(e) => setBudgetForMonth(m, e.target.value)}
+                              className="w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTrend === "burn" ? (
+            <CumulativeBurnCurve
+              monthsAll={MONTHS}
+              visibleMonths={visibleMonths}
+              actualCumByMonth={burnCurve.actualCum}
+              budgetCumByMonth={burnCurve.budgetCum}
+            />
+          ) : null}
+
+          {activeTrend === "drift" ? (
+            <SplitDriftChart
+              months={visibleMonths}
+              msPctByMonth={splitPct.msPct}
+              nfPctByMonth={splitPct.nfPct}
+            />
+          ) : null}
+
+          {activeTrend === "monthly" ? (
+            <StackedBars months={visibleMonths} series={stackedSeries} />
+          ) : null}
+
+          {activeTrend === "split" ? (
+            <TwoLineChart
+              months={visibleMonths}
+              msByMonth={msByMonth}
+              nfByMonth={nfByMonth}
+            />
+          ) : null}
+
+          {activeTrend === "contributors" ? (
+            <div className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-extrabold text-gray-900">
+                    Top contributors
+                  </div>
+                  <div className="mt-0.5 text-xs font-semibold text-gray-500">
+                    Totals across selected months
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-[760px] w-full text-left">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        Avg / Month
+                      </th>
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        % of Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {contributors.map((r) => (
+                      <tr key={r.label}>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {r.label}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                          {fmt(r.total)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {fmt(r.avgPerMonth)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-700">
+                          {pct(r.pctOfTotal)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        Grand Total
+                      </td>
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        {fmt(sums.grandTotal)}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        {fmt(sums.runRate)}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        100%
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="h-10" />
