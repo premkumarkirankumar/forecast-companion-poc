@@ -2696,7 +2696,33 @@ export default function TrendsPage({
           ) : null}
 
           {activeTrend === "inputs" ? (
-            <div className="grid gap-5 xl:grid-cols-2">
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-extrabold text-blue-950">
+                      Comparison inputs
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-blue-900/80">
+                      Forecast is not entered or saved in this panel. It is derived live from the
+                      saved Internal, Tools &amp; Services, and External entries for the selected
+                      program. This view is only for entering the two comparison baselines used in
+                      Trends:
+                      <span className="font-extrabold"> Actuals</span> and
+                      <span className="font-extrabold"> Budget</span>.
+                    </div>
+                    <div className="mt-2 text-xs font-semibold text-blue-900/70">
+                      Forecast source: current saved program data. Actuals source: manual monthly
+                      entry. Budget source: manual monthly target baseline.
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-blue-900">
+                    Forecast is derived live
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-2">
               <div className="rounded-2xl border bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -2704,7 +2730,8 @@ export default function TrendsPage({
                       Actuals inputs
                     </div>
                     <div className="mt-1 text-xs font-semibold text-gray-500">
-                      Enter monthly actuals used in variance and cumulative burn views.
+                      Enter actual monthly spend as it occurs. These values are saved as the
+                      month-by-month actual baseline for variance and cumulative burn comparisons.
                     </div>
                   </div>
 
@@ -2757,10 +2784,12 @@ export default function TrendsPage({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-sm font-extrabold text-gray-900">
-                      Budget inputs
+                      Budget baseline
                     </div>
                     <div className="mt-1 text-xs font-semibold text-gray-500">
-                      Enter monthly budget targets for the variance and burn comparison views.
+                      Enter the planned monthly budget target used as the comparison baseline. This
+                      is saved separately from the forecast and remains independent from the live
+                      calculated forecast.
                     </div>
                   </div>
 
@@ -2787,7 +2816,7 @@ export default function TrendsPage({
                     <thead>
                       <tr className="border-b bg-gray-50">
                         <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Month</th>
-                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Budget</th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Budget target</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -2807,6 +2836,7 @@ export default function TrendsPage({
                     </tbody>
                   </table>
                 </div>
+              </div>
               </div>
             </div>
           ) : null}
