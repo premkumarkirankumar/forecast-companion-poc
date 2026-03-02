@@ -39,6 +39,7 @@ export default function MonthTable({
   executiveSummary = false,
   summaryMetricLabel = "",
   summaryMetricValue = null,
+  summaryMetrics = null,
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   // Month range selection (0..11)
@@ -97,6 +98,11 @@ export default function MonthTable({
     return months.reduce((acc, m) => acc + Number(map?.[m] ?? 0), 0);
   }
 
+  const normalizedSummaryMetrics = Array.isArray(summaryMetrics) && summaryMetrics.length
+    ? summaryMetrics
+    : summaryMetricLabel
+      ? [{ label: summaryMetricLabel, value: summaryMetricValue ?? 0 }]
+      : [];
   return (
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <button
@@ -127,11 +133,14 @@ export default function MonthTable({
                   </span>
                 </>
               ) : null}
-              {summaryMetricLabel ? (
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700 ring-1 ring-sky-100">
-                  {summaryMetricLabel} {summaryMetricValue ?? 0}
+              {normalizedSummaryMetrics.map((metric) => (
+                <span
+                  key={metric.label}
+                  className="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700 ring-1 ring-sky-100"
+                >
+                  {metric.label} {metric.value ?? 0}
                 </span>
-              ) : null}
+              ))}
             </div>
           </div>
 
@@ -216,10 +225,8 @@ export default function MonthTable({
 
       {summary ? (
         <div
-          className={[
-            "grid gap-3 border-t border-gray-100 px-5 py-3",
-            summaryMetricLabel ? "grid-cols-1 md:grid-cols-5" : "grid-cols-1 md:grid-cols-4",
-          ].join(" ")}
+          className="grid gap-3 border-t border-gray-100 px-5 py-3"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}
         >
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -259,16 +266,19 @@ export default function MonthTable({
               {fmt(summary.lowMonth.total)}
             </div>
           </div>
-          {summaryMetricLabel ? (
-            <div className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3">
+          {normalizedSummaryMetrics.map((metric) => (
+            <div
+              key={metric.label}
+              className="rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3"
+            >
               <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                {summaryMetricLabel}
+                {metric.label}
               </div>
               <div className="mt-1 text-lg font-extrabold text-gray-900">
-                {summaryMetricValue ?? 0}
+                {metric.value ?? 0}
               </div>
             </div>
-          ) : null}
+          ))}
         </div>
       ) : null}
 

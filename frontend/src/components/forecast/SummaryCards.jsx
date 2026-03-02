@@ -900,8 +900,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
                   rows={externalMonthlyRows}
                   showMonthFilter={true}
                   executiveSummary={true}
-                  summaryMetricLabel="Contractors + SOWs"
-                  summaryMetricValue={contractors.length + sows.length}
+                  summaryMetrics={[
+                    { label: "Contractors", value: contractors.length },
+                    { label: "SOWs", value: sows.length },
+                  ]}
                 />
               </div>
 

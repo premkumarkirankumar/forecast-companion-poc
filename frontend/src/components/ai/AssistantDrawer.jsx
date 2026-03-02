@@ -8,6 +8,7 @@ export default function AssistantDrawer({ open, onClose, programId }) {
   const [messages, setMessages] = useState([]); // {role:'user'|'ai', text}
   const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
+  const typingTimerRef = useRef(null);
   const quickPrompts = [
     "Give me a concise summary of this program's tracked spend.",
     "Summarize the delivery risks in this forecast.",
@@ -23,36 +24,72 @@ export default function AssistantDrawer({ open, onClose, programId }) {
     }
   }, [open]);
 
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        window.clearInterval(typingTimerRef.current);
+      }
+    };
+  }, []);
+
   if (!open) return null;
 
-  async function ask(qOverride) {
-  const q = (qOverride ?? question).trim();
-  if (!q || loading) return;
+  function typeAiMessage(text) {
+    return new Promise((resolve) => {
+      const fullText = String(text || "No response");
+      let index = 0;
 
-  setMessages((m) => [...m, { role: "user", text: q }]);
-  setQuestion("");
-  setLoading(true);
+      setMessages((m) => [...m, { role: "ai", text: "" }]);
 
-  try {
-    const r = await fetch(FN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ programId, question: q }),
+      if (typingTimerRef.current) {
+        window.clearInterval(typingTimerRef.current);
+      }
+
+      typingTimerRef.current = window.setInterval(() => {
+        index += 10;
+        setMessages((m) => {
+          if (!m.length) return m;
+          const next = [...m];
+          const last = next[next.length - 1];
+          if (!last || last.role !== "ai") return m;
+          next[next.length - 1] = { ...last, text: fullText.slice(0, index) };
+          return next;
+        });
+
+        if (index >= fullText.length) {
+          window.clearInterval(typingTimerRef.current);
+          typingTimerRef.current = null;
+          resolve();
+        }
+      }, 14);
     });
-
-    const j = await r.json();
-    const text = j?.answerText || j?.error || "No response";
-
-    setMessages((m) => [...m, { role: "ai", text }]);
-  } catch (e) {
-    setMessages((m) => [
-      ...m,
-      { role: "ai", text: "Request failed. Check console/network." },
-    ]);
-  } finally {
-    setLoading(false);
   }
-}
+
+  async function ask(qOverride) {
+    const q = (qOverride ?? question).trim();
+    if (!q || loading) return;
+
+    setMessages((m) => [...m, { role: "user", text: q }]);
+    setQuestion("");
+    setLoading(true);
+
+    try {
+      const r = await fetch(FN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ programId, question: q }),
+      });
+
+      const j = await r.json();
+      const text = j?.answerText || j?.error || "No response";
+
+      await typeAiMessage(text);
+    } catch (e) {
+      await typeAiMessage("Request failed. Check console/network.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function onKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
