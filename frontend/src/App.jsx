@@ -382,7 +382,7 @@ export default function App() {
               onClick={() => setPage("techstack")}
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
             >
-              Tool Investments
+              Strategic View
             </button>
 
             <button
