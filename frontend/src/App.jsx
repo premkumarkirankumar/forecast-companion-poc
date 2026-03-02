@@ -335,6 +335,14 @@ export default function App() {
     );
   }
 
+  const navButtonClass = (active) =>
+    [
+      "rounded-xl px-4 py-2 text-sm font-semibold transition duration-200 ease-out transform-gpu",
+      active
+        ? "bg-gray-900 text-white shadow-sm ring-1 ring-gray-900"
+        : "bg-white text-gray-900 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-sky-50 hover:text-sky-900 hover:shadow-md hover:ring-1 hover:ring-sky-200",
+    ].join(" ");
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar */}
@@ -349,55 +357,53 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage("executive")}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Executive Summary
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50/80 p-1.5">
+              <button
+                onClick={() => setPage("executive")}
+                className={navButtonClass(page === "executive")}
+              >
+                Executive Summary
+              </button>
 
-            <button
-              onClick={() => setPage("data")}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Data Management
-            </button>
+              <button
+                onClick={() => setPage("techstack")}
+                className={navButtonClass(page === "techstack")}
+              >
+                Strategic View
+              </button>
 
-            <button
-              onClick={() => setAiOpen(true)}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              AI Advisor
-            </button>
+              <button onClick={() => setAiOpen(true)} className={navButtonClass(aiOpen)}>
+                AI Advisor
+              </button>
 
-            <button
-              onClick={() => setPage("trends")}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Trends
-            </button>
+              <button
+                onClick={() => setPage("trends")}
+                className={navButtonClass(page === "trends")}
+              >
+                Trends
+              </button>
+            </div>
 
-            <button
-              onClick={() => setPage("techstack")}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Strategic View
-            </button>
+            <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-sm">
+              <button
+                onClick={() => setPage("changelog")}
+                className={navButtonClass(page === "changelog")}
+              >
+                Change Log
+              </button>
 
-            <button
-              onClick={() => setPage("changelog")}
-              className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-            >
-              Change Log
-            </button>
+              <button
+                onClick={() => setPage("data")}
+                className={navButtonClass(page === "data")}
+              >
+                Data Management
+              </button>
 
-            <button
-              onClick={returnToEntry}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Entry Options
-            </button>
+              <button onClick={returnToEntry} className={navButtonClass(false)}>
+                Entry Options
+              </button>
+            </div>
 
             <AuthBar onSignedIn={handleAuthEntry} onSignedOut={returnToEntry} />
           </div>
