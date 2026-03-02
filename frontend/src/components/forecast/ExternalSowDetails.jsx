@@ -512,7 +512,7 @@ export default function ExternalSowDetails({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-sm font-semibold text-gray-900">
-            External Details — SOW
+            SOW — Add Entry
           </div>
           <div className="mt-1 text-xs text-gray-600">
             Add SOW → set yearly target → edit MS/NF by month (auto rebalances

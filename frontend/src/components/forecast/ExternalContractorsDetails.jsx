@@ -575,7 +575,7 @@ export default function ExternalContractorsDetails({
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-sm font-semibold text-gray-900">
-            External Details — Contractors
+            Contractors — Add Entry
           </div>
           <div className="mt-1 text-xs text-gray-600">
             Add contractors → set yearly target → edit MS/NF by month (auto rebalances remaining months).

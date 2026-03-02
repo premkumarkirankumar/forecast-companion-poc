@@ -820,12 +820,29 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
               </div>
 
               <div className="mt-6 border-t pt-6">
-                <InternalLabor
-                  mode="details"
-                  items={internalLaborItems}
-                  setItems={setInternalLaborItems}
-                  onLog={logInternal}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">Internal Labor FTE Details</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {internalLaborItems.length} {internalLaborItems.length === 1 ? "saved entry" : "saved entries"} • Expand to manage the full internal staffing detail
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <InternalLabor
+                      mode="details"
+                      items={internalLaborItems}
+                      setItems={setInternalLaborItems}
+                      onLog={logInternal}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
           ) : null}
@@ -840,17 +857,36 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
                   rows={tnsMonthlyRows}
                   showMonthFilter={true}
                   executiveSummary={true}
+                  summaryMetricLabel="Total Tools"
+                  summaryMetricValue={tnsItems.length}
                 />
               </div>
 
               <div className="mt-6 border-t pt-6">
-                <ToolsServicesDetails
-                  programKey={programKey}
-                  items={tnsItems}
-                  setItems={setTnsItems}
-                  onLog={logTns}
-                  onCommitNow={() => commitNow("tools")}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {(tnsItems || []).length} {(tnsItems || []).length === 1 ? "saved entry" : "saved entries"} • Expand to manage the full tools section
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <ToolsServicesDetails
+                      programKey={programKey}
+                      items={tnsItems}
+                      setItems={setTnsItems}
+                      onLog={logTns}
+                      onCommitNow={() => commitNow("tools")}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
           ) : null}
@@ -864,25 +900,61 @@ export default function SummaryCards({ selectedProgram, onProgramChange, entryMo
                   rows={externalMonthlyRows}
                   showMonthFilter={true}
                   executiveSummary={true}
+                  summaryMetricLabel="Contractors + SOWs"
+                  summaryMetricValue={contractors.length + sows.length}
                 />
               </div>
 
               <div className="mt-6 border-t pt-6 space-y-6">
-                <ExternalContractorsDetails
-                  programKey={programKey}
-                  contractors={contractors}
-                  setContractors={setContractors}
-                  onLog={logExternal}
-                  onCommitNow={() => commitNow("external")}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">External Details — Contractors</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {(contractors || []).length} {(contractors || []).length === 1 ? "saved entry" : "saved entries"} • Expand to manage contractor details
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <ExternalContractorsDetails
+                      programKey={programKey}
+                      contractors={contractors}
+                      setContractors={setContractors}
+                      onLog={logExternal}
+                      onCommitNow={() => commitNow("external")}
+                    />
+                  </div>
+                </details>
 
-                <ExternalSowDetails
-                  programKey={programKey}
-                  sows={sows}
-                  setSows={setSows}
-                  onLog={logExternal}
-                  onCommitNow={() => commitNow("external")}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">External Details — SOW</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {(sows || []).length} {(sows || []).length === 1 ? "saved entry" : "saved entries"} • Expand to manage SOW details
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <ExternalSowDetails
+                      programKey={programKey}
+                      sows={sows}
+                      setSows={setSows}
+                      onLog={logExternal}
+                      onCommitNow={() => commitNow("external")}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
           ) : null}
