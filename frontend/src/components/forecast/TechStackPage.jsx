@@ -56,6 +56,37 @@ const STRATEGIC_MODULES = [
       "Execution balance across programs, including build-vs-run posture, role pyramid, and delivery risk signals.",
     accent: "border-emerald-100 bg-emerald-50/70",
   },
+  {
+    id: "savings-levers",
+    label: "Savings Levers",
+    title: "Savings levers",
+    description:
+      "Lightweight cost-save scenarios based on tool spend, external reliance, and low-disruption planning levers.",
+    accent: "border-amber-100 bg-amber-50/70",
+  },
+];
+
+const SAVINGS_MODES = [
+  {
+    id: "low",
+    label: "Low Target",
+    description: "Conservative, low-disruption levers first",
+  },
+  {
+    id: "medium",
+    label: "Medium Target",
+    description: "Balanced savings mix across tools and external spend",
+  },
+  {
+    id: "aggressive",
+    label: "Aggressive Target",
+    description: "Higher savings reach with stronger cost actions",
+  },
+  {
+    id: "risk-cover",
+    label: "Risk-cover Ranking",
+    description: "Order options by lower disruption and delivery safety",
+  },
 ];
 
 function fmtCurrency(value) {
@@ -120,6 +151,21 @@ function sumTool(item) {
       Number(item?.nfByMonth?.[month] ?? 0)
     );
   }, 0);
+}
+
+function sumTrackedMonths(item) {
+  return MONTHS.reduce((sum, month) => {
+    return (
+      sum +
+      Number(item?.msByMonth?.[month] ?? 0) +
+      Number(item?.nfByMonth?.[month] ?? 0)
+    );
+  }, 0);
+}
+
+function parseWholeNumberInput(value) {
+  const digits = String(value ?? "").replace(/[^\d]/g, "");
+  return digits ? Number(digits) : 0;
 }
 
 function aggregateTools(statesByProgram, programFilter) {
@@ -204,29 +250,80 @@ function getActiveProgramIds(programFilter) {
   return programFilter === "all" ? ["connected", "tre", "csc"] : [programFilter];
 }
 
+function normalizeRoleText(role) {
+  const value = String(role || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return value ? ` ${value} ` : "";
+}
+
+function hasRoleKeyword(normalizedRole, keywords) {
+  return keywords.some((keyword) => normalizedRole.includes(` ${keyword} `));
+}
+
+function getRoleProfile(role) {
+  const normalizedRole = normalizeRoleText(role);
+  if (!normalizedRole) {
+    return {
+      isDeveloper: false,
+      isQa: false,
+      tier: "Other Specialized",
+    };
+  }
+
+  const isLeadership = hasRoleKeyword(normalizedRole, [
+    "lead",
+    "manager",
+    "architect",
+    "principal",
+    "director",
+    "head",
+  ]);
+  const isSenior = hasRoleKeyword(normalizedRole, ["senior", "sr", "staff"]);
+  const isQa = hasRoleKeyword(normalizedRole, [
+    "qa",
+    "qe",
+    "quality",
+    "test",
+    "tester",
+    "testing",
+    "sdet",
+    "validation",
+    "verification",
+  ]);
+  const isDeveloper = hasRoleKeyword(normalizedRole, [
+    "developer",
+    "dev",
+    "engineer",
+    "eng",
+    "sde",
+    "frontend",
+    "backend",
+    "fullstack",
+    "devops",
+  ]);
+
+  const tier = isLeadership
+    ? "Leadership / Architecture"
+    : isSenior
+      ? "Senior Delivery"
+      : isQa
+        ? "QA / Validation"
+        : isDeveloper
+          ? "Core Builders"
+          : "Other Specialized";
+
+  return {
+    isDeveloper,
+    isQa,
+    tier,
+  };
+}
+
 function classifyRoleTier(role) {
-  const value = String(role || "").trim().toLowerCase();
-  if (!value) return "Other Specialized";
-  if (
-    value.includes("lead") ||
-    value.includes("manager") ||
-    value.includes("architect") ||
-    value.includes("principal") ||
-    value.includes("director") ||
-    value.includes("head")
-  ) {
-    return "Leadership / Architecture";
-  }
-  if (value.includes("senior") || value.includes("staff")) {
-    return "Senior Delivery";
-  }
-  if (value.includes("qa") || value.includes("test") || value.includes("quality")) {
-    return "QA / Validation";
-  }
-  if (value.includes("developer") || value.includes("engineer")) {
-    return "Core Builders";
-  }
-  return "Other Specialized";
+  return getRoleProfile(role).tier;
 }
 
 function aggregateWorkforce(statesByProgram, programFilter) {
@@ -241,6 +338,7 @@ function aggregateWorkforce(statesByProgram, programFilter) {
         id: `fte-${item?.id || item?.name || crypto.randomUUID()}`,
         name: String(item?.name ?? "").trim(),
         meta: item?.role ? String(item.role).trim() : "",
+        roleProfile: getRoleProfile(item?.role),
         type: "FTE",
       }))
       .filter((person) => person.name);
@@ -250,25 +348,17 @@ function aggregateWorkforce(statesByProgram, programFilter) {
         id: `contractor-${item?.id || item?.name || crypto.randomUUID()}`,
         name: String(item?.name ?? "").trim(),
         meta: item?.role ? String(item.role).trim() : "",
+        roleProfile: getRoleProfile(item?.role),
         type: "Contractor",
       }))
       .filter((person) => person.name);
 
-    const matchesRole = (value, needle) =>
-      String(value || "")
-        .toLowerCase()
-        .includes(needle);
-
-    const internalDeveloperCount = internalPeople.filter((person) =>
-      matchesRole(person.meta, "developer")
+    const internalDeveloperCount = internalPeople.filter((person) => person.roleProfile.isDeveloper).length;
+    const internalQaCount = internalPeople.filter((person) => person.roleProfile.isQa).length;
+    const contractorDeveloperCount = contractorPeople.filter(
+      (person) => person.roleProfile.isDeveloper
     ).length;
-    const internalQaCount = internalPeople.filter((person) => matchesRole(person.meta, "qa")).length;
-    const contractorDeveloperCount = contractorPeople.filter((person) =>
-      matchesRole(person.meta, "developer")
-    ).length;
-    const contractorQaCount = contractorPeople.filter((person) =>
-      matchesRole(person.meta, "qa")
-    ).length;
+    const contractorQaCount = contractorPeople.filter((person) => person.roleProfile.isQa).length;
 
     const roleCounter = new Map();
     for (const person of [...internalPeople, ...contractorPeople]) {
@@ -338,6 +428,7 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
     const internalItems = Array.isArray(state?.internalLaborItems) ? state.internalLaborItems : [];
     const contractorItems = Array.isArray(state?.contractors) ? state.contractors : [];
     const sowItems = Array.isArray(state?.sows) ? state.sows : [];
+    const toolItems = Array.isArray(state?.tnsItems) ? state.tnsItems : [];
 
     let runSignal = 0;
     let buildSignal = 0;
@@ -349,36 +440,36 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
 
     for (const item of internalItems) {
       const role = String(item?.role || "").trim();
+      const roleProfile = getRoleProfile(role);
       runSignal += Number(item?.runPct ?? 0);
       buildSignal += Number(item?.growthPct ?? 0);
       internalCount += 1;
 
       if (role) {
-        const tier = classifyRoleTier(role);
+        const tier = roleProfile.tier;
         tierCounter.set(tier, (tierCounter.get(tier) || 0) + 1);
         const tierDetails = tierDetailCounter.get(tier);
         tierDetails.set(role, (tierDetails.get(role) || 0) + 1);
-        const lower = role.toLowerCase();
-        if (lower.includes("developer")) developerCount += 1;
-        if (lower.includes("qa")) qaCount += 1;
+        if (roleProfile.isDeveloper) developerCount += 1;
+        if (roleProfile.isQa) qaCount += 1;
       }
     }
 
     for (const item of contractorItems) {
       const role = String(item?.role || "").trim();
+      const roleProfile = getRoleProfile(role);
       runSignal += Number(item?.msPct ?? 0);
       buildSignal += Number(item?.nfPct ?? 0);
       contractorCount += 1;
       externalWeightedCount += 1;
 
       if (role) {
-        const tier = classifyRoleTier(role);
+        const tier = roleProfile.tier;
         tierCounter.set(tier, (tierCounter.get(tier) || 0) + 1);
         const tierDetails = tierDetailCounter.get(tier);
         tierDetails.set(role, (tierDetails.get(role) || 0) + 1);
-        const lower = role.toLowerCase();
-        if (lower.includes("developer")) developerCount += 1;
-        if (lower.includes("qa")) qaCount += 1;
+        if (roleProfile.isDeveloper) developerCount += 1;
+        if (roleProfile.isQa) qaCount += 1;
       }
     }
 
@@ -428,6 +519,15 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
       riskSignals.push("Delivery capacity is heavily weighted toward external execution.");
     }
 
+    const topTool =
+      toolItems
+        .map((item) => ({
+          name: String(item?.name || "").trim(),
+          total: sumTool(item),
+        }))
+        .filter((item) => item.name)
+        .sort((a, b) => b.total - a.total)[0] || null;
+
     return {
       programId,
       label:
@@ -439,6 +539,7 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
       developerCount,
       qaCount,
       externalReliancePct,
+      topTool,
       riskSignals,
     };
   });
@@ -474,6 +575,9 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
     Array.from(tierCounter.entries())
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count)[0] || null;
+  const totalTierCount = Array.from(tierCounter.values()).reduce((sum, count) => sum + count, 0);
+  const dominantRoleShare =
+    topRoleTier && totalTierCount > 0 ? (topRoleTier.count / totalTierCount) * 100 : 0;
   const attentionProgram =
     programBreakdown
       .slice()
@@ -483,12 +587,109 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
         }
         return b.externalReliancePct - a.externalReliancePct;
       })[0] || null;
+  const signalCards = [];
+
+  if (benchmarkStatus === "Needs QA coverage") {
+    signalCards.push({
+      title: "QA coverage gap",
+      detail: "Developers are present, but no QA capacity is currently represented in this view.",
+      tone: "critical",
+    });
+  } else if (benchmarkStatus === "Above 3 : 1 benchmark") {
+    signalCards.push({
+      title: "Developer-heavy mix",
+      detail: `The current ${ratio} ratio is above the 3 : 1 benchmark and may need stronger QA support.`,
+      tone: "warning",
+    });
+  } else if (benchmarkStatus === "QA-heavy mix") {
+    signalCards.push({
+      title: "QA-weighted coverage",
+      detail: `The current ${ratio} ratio is below 2 : 1, indicating heavier QA coverage than the benchmark range.`,
+      tone: "watch",
+    });
+  } else if (benchmarkStatus === "Meeting benchmark") {
+    signalCards.push({
+      title: "Benchmark range is healthy",
+      detail: `The current ${ratio} ratio is inside the 2 : 1 to 3 : 1 target range.`,
+      tone: "positive",
+    });
+  }
+
+  if (buildPct < 25) {
+    signalCards.push({
+      title: "Build capacity is light",
+      detail: `Only ${clampPctDisplay(buildPct)}% of weighted delivery capacity is pointed at build work.`,
+      tone: "warning",
+    });
+  }
+
+  if (totals.externalReliance / divisor > 60) {
+    signalCards.push({
+      title: "External reliance is elevated",
+      detail: `${clampPctDisplay(
+        totals.externalReliance / divisor
+      )}% of delivery capacity is externally weighted across the selected view.`,
+      tone: "warning",
+    });
+  }
+
+  if (dominantRoleShare >= 45 && topRoleTier) {
+    signalCards.push({
+      title: "Role mix is concentrated",
+      detail: `${topRoleTier.label} accounts for ${clampPctDisplay(
+        dominantRoleShare
+      )}% of the mapped role pyramid.`,
+      tone: "watch",
+    });
+  }
+
+  if (!signalCards.length) {
+    signalCards.push({
+      title: "Delivery mix is steady",
+      detail: "Current delivery composition is balanced across benchmark, sourcing, and role coverage signals.",
+      tone: "positive",
+    });
+  }
+
+  const signalToneRank = { positive: 0, watch: 1, warning: 2, critical: 3 };
+  const highestTone = signalCards.reduce(
+    (best, signal) =>
+      signalToneRank[signal.tone] > signalToneRank[best] ? signal.tone : best,
+    "positive"
+  );
+  const overallStatusLabel =
+    highestTone === "critical"
+      ? "At Risk"
+      : highestTone === "warning" || highestTone === "watch"
+        ? "Watch"
+        : "Healthy";
+  const overallStatusTone =
+    highestTone === "critical"
+      ? "critical"
+      : highestTone === "warning" || highestTone === "watch"
+        ? "watch"
+        : "positive";
+  const overallStatusDetail =
+    overallStatusLabel === "At Risk"
+      ? "Immediate delivery watchouts are present in the selected view and should be reviewed before additional cost actions."
+      : overallStatusLabel === "Watch"
+        ? "The delivery posture is workable, but one or more benchmark or sourcing indicators need attention."
+        : "The current delivery posture is balanced across benchmark, sourcing, and role coverage indicators.";
+  const topRiskDriver =
+    signalCards
+      .slice()
+      .sort((a, b) => signalToneRank[b.tone] - signalToneRank[a.tone])[0]?.title ||
+    "No active delivery watchouts";
 
   return {
     buildPct,
     runPct,
     ratio,
     benchmarkStatus,
+    overallStatusLabel,
+    overallStatusTone,
+    overallStatusDetail,
+    topRiskDriver,
     averageExternalReliance: totals.externalReliance / divisor,
     roleTiers: Array.from(tierCounter.entries())
       .map(([label, count]) => ({
@@ -505,9 +706,231 @@ function aggregateDeliveryComposition(statesByProgram, programFilter) {
     topRoleTier,
     attentionProgram,
     programBreakdown,
+    signalCards,
     riskSignals: uniqueRisks.length
       ? uniqueRisks
       : ["Delivery composition looks balanced across the selected view."],
+  };
+}
+
+function aggregateSavingsLevers(
+  statesByProgram,
+  programFilter,
+  targetAmount,
+  deliveryComposition,
+  mode
+) {
+  const activePrograms = getActiveProgramIds(programFilter);
+  const guardedPrograms = new Set(
+    (deliveryComposition?.programBreakdown || [])
+      .filter((program) => Array.isArray(program.riskSignals) && program.riskSignals.length > 0)
+      .map((program) => program.programId)
+  );
+  const toolCounter = new Map();
+  const externalByProgram = [];
+  let totalExternal = 0;
+
+  for (const programId of activePrograms) {
+    const state = statesByProgram?.[programId] || {};
+    const toolItems = Array.isArray(state?.tnsItems) ? state.tnsItems : [];
+    const contractorItems = Array.isArray(state?.contractors) ? state.contractors : [];
+    const sowItems = Array.isArray(state?.sows) ? state.sows : [];
+
+    for (const item of toolItems) {
+      const name = String(item?.name || "").trim();
+      if (!name) continue;
+      toolCounter.set(name, (toolCounter.get(name) || 0) + sumTool(item));
+    }
+
+    const externalTotal =
+      contractorItems.reduce((sum, item) => sum + sumTrackedMonths(item), 0) +
+      sowItems.reduce((sum, item) => sum + sumTrackedMonths(item), 0);
+    totalExternal += externalTotal;
+    externalByProgram.push({
+      programId,
+      label: PROGRAMS.find((program) => program.id === programId)?.label || programId.toUpperCase(),
+      total: externalTotal,
+      guarded: guardedPrograms.has(programId),
+    });
+  }
+
+  const topTools = Array.from(toolCounter.entries())
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
+  const eligibleExternalPrograms = externalByProgram.filter((program) => !program.guarded);
+  const highestExternalProgram =
+    eligibleExternalPrograms.slice().sort((a, b) => b.total - a.total)[0] || null;
+  const highestGuardedExternalProgram =
+    externalByProgram
+      .filter((program) => program.guarded)
+      .sort((a, b) => b.total - a.total)[0] || null;
+  const totalToolSpend = Array.from(toolCounter.values()).reduce((sum, value) => sum + value, 0);
+  const topToolSpend = topTools.reduce((sum, tool) => sum + tool.total, 0);
+  const remainingToolSpend = Math.max(0, totalToolSpend - topToolSpend);
+  const totalEligibleExternal = eligibleExternalPrograms.reduce(
+    (sum, program) => sum + program.total,
+    0
+  );
+  const highestExternalTotal = highestExternalProgram?.total || 0;
+  const remainingExternalSpend = Math.max(0, totalEligibleExternal - highestExternalTotal);
+
+  const suggestions = [];
+  const target = Math.max(0, Number(targetAmount || 0));
+  const config =
+    mode === "low"
+      ? {
+          toolPct: 0.03,
+          externalPct: 0.02,
+          internalShiftPct: 0.015,
+          expandThreshold: false,
+          riskOrder: false,
+        }
+      : mode === "aggressive"
+        ? {
+            toolPct: 0.07,
+            externalPct: 0.05,
+            internalShiftPct: 0.03,
+            expandThreshold: true,
+            riskOrder: false,
+          }
+        : mode === "risk-cover"
+          ? {
+              toolPct: 0.03,
+              externalPct: 0.02,
+              internalShiftPct: 0.01,
+              expandThreshold: true,
+              riskOrder: true,
+            }
+          : {
+              toolPct: 0.05,
+              externalPct: 0.03,
+              internalShiftPct: 0.02,
+              expandThreshold: true,
+              riskOrder: false,
+            };
+
+  for (const tool of topTools) {
+    suggestions.push({
+      title: `Renegotiate ${tool.name}`,
+      savings: Math.round(tool.total * config.toolPct),
+      detail: `A ${Math.round(
+        config.toolPct * 100
+      )}% optimization on this recurring tool line yields low-disruption savings.`,
+      lane: "Tools",
+      risk: "Low",
+      rank: 1,
+    });
+  }
+
+  if (highestExternalProgram && highestExternalProgram.total > 0) {
+    suggestions.push({
+      title: `Right-size external demand in ${highestExternalProgram.label}`,
+      savings: Math.round(highestExternalProgram.total * config.externalPct),
+      detail: `A ${Math.round(
+        config.externalPct * 100
+      )}% trim on the heaviest external program can free savings without materially shifting delivery scope.`,
+      lane: "External",
+      risk: mode === "aggressive" ? "Medium" : "Low",
+      rank: mode === "risk-cover" ? 2 : 3,
+    });
+  }
+
+  if (!highestExternalProgram && highestGuardedExternalProgram) {
+    suggestions.push({
+      title: `Protect delivery in ${highestGuardedExternalProgram.label}`,
+      savings: 0,
+      detail:
+        "The highest external-spend program is already flagged by Delivery Composition, so this view avoids recommending a direct cut there.",
+      lane: "Guardrail",
+      risk: "Low",
+      rank: 0,
+    });
+  }
+
+  if (deliveryComposition.averageExternalReliance > 60 && totalEligibleExternal > 0) {
+    suggestions.push({
+      title: "Shift a small share to internal capacity",
+      savings: Math.round(remainingExternalSpend * config.internalShiftPct),
+      detail:
+        "Reducing external reliance slightly across non-guarded programs is the cleanest structural lever when contractor and SOW mix is elevated.",
+      lane: "Mix",
+      risk: mode === "aggressive" ? "Medium" : "Low",
+      rank: mode === "risk-cover" ? 1 : 2,
+    });
+  }
+
+  let totalPotential = suggestions.reduce((sum, item) => sum + item.savings, 0);
+
+  if (config.expandThreshold && target > totalPotential && remainingToolSpend > 0) {
+    suggestions.push({
+      title: "Tighten broader tool governance",
+      savings: Math.round(remainingToolSpend * (mode === "aggressive" ? 0.04 : 0.02)),
+      detail:
+        "A control on the remaining tools portfolio can capture additional savings beyond the largest line items already targeted above.",
+      lane: "Tools",
+      risk: "Medium",
+      rank: 4,
+    });
+    totalPotential = suggestions.reduce((sum, item) => sum + item.savings, 0);
+  }
+
+  if (
+    config.expandThreshold &&
+      target > totalPotential &&
+      highestExternalProgram &&
+      highestExternalProgram.total > 0
+    ) {
+    const incrementalExternalPct = Math.max(
+      0,
+      (mode === "aggressive" ? 0.07 : 0.05) - config.externalPct
+    );
+    suggestions.push({
+      title: `Phase external scope in ${highestExternalProgram.label}`,
+      savings: Math.round(highestExternalProgram.total * incrementalExternalPct),
+      detail:
+        "A second-pass phasing option on the largest external program adds incremental savings beyond the first external trim.",
+      lane: "External",
+      risk: "High",
+      rank: 5,
+    });
+    totalPotential = suggestions.reduce((sum, item) => sum + item.savings, 0);
+  }
+
+  if (config.expandThreshold && target > totalPotential && remainingExternalSpend > 0) {
+    suggestions.push({
+      title: "Pause lower-priority external increments",
+      savings: Math.round(remainingExternalSpend * (mode === "aggressive" ? 0.03 : 0.015)),
+      detail:
+        "A targeted hold on non-critical external expansion creates extra headroom after the primary external levers are already applied.",
+      lane: "Mix",
+      risk: "High",
+      rank: 6,
+    });
+    totalPotential = suggestions.reduce((sum, item) => sum + item.savings, 0);
+  }
+
+  const orderedSuggestions = config.riskOrder
+    ? suggestions
+        .slice()
+        .sort((a, b) => {
+          const riskScore = { Low: 0, Medium: 1, High: 2 };
+          if (riskScore[a.risk] !== riskScore[b.risk]) {
+            return riskScore[a.risk] - riskScore[b.risk];
+          }
+          return (a.rank || 99) - (b.rank || 99);
+        })
+    : suggestions;
+
+  totalPotential = orderedSuggestions.reduce((sum, item) => sum + item.savings, 0);
+
+  return {
+    suggestions: orderedSuggestions,
+    totalPotential,
+    target,
+    coveragePct: target > 0 ? Math.min(100, Math.round((totalPotential / target) * 100)) : 0,
+    remainingGap: Math.max(0, target - totalPotential),
+    modeLabel: SAVINGS_MODES.find((item) => item.id === mode)?.label || "Medium Target",
   };
 }
 
@@ -542,8 +965,11 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
   const [strategicSection, setStrategicSection] = useState("tool-investments");
   const [programFilter, setProgramFilter] = useState("all");
   const [statesByProgram, setStatesByProgram] = useState({});
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [savingsTargetInput, setSavingsTargetInput] = useState("200000");
+  const [savingsMode, setSavingsMode] = useState("medium");
 
   useEffect(() => {
     let cancelled = false;
@@ -570,6 +996,7 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
 
         if (!cancelled) {
           setStatesByProgram(Object.fromEntries(entries));
+          setLastRefreshedAt(new Date());
         }
       } catch (e) {
         console.error("Failed to load tech stack view:", e);
@@ -598,6 +1025,28 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
   const deliveryComposition = useMemo(
     () => aggregateDeliveryComposition(statesByProgram, programFilter),
     [programFilter, statesByProgram]
+  );
+  const savingsTargetValue = useMemo(
+    () => parseWholeNumberInput(savingsTargetInput),
+    [savingsTargetInput]
+  );
+  const savingsLevers = useMemo(
+    () =>
+      aggregateSavingsLevers(
+        statesByProgram,
+        programFilter,
+        savingsTargetValue,
+        deliveryComposition,
+        savingsMode
+      ),
+    [deliveryComposition, programFilter, savingsMode, savingsTargetValue, statesByProgram]
+  );
+  const noRegretSuggestions = useMemo(
+    () =>
+      savingsLevers.suggestions
+        .filter((item) => item.risk === "Low" && item.savings > 0 && item.lane !== "Guardrail")
+        .slice(0, 3),
+    [savingsLevers]
   );
 
   const activeTool = useMemo(() => {
@@ -661,6 +1110,9 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
 
   const leadingProgramLabel =
     PROGRAMS.find((program) => program.id === summary.leadingProgram.programId)?.label || "Connected";
+  const refreshedLabel = lastRefreshedAt
+    ? lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : "";
 
   const activeModule =
     STRATEGIC_MODULES.find((module) => module.id === strategicSection) || STRATEGIC_MODULES[0];
@@ -704,10 +1156,6 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
               <div className="mt-2 text-4xl font-black tracking-tight text-gray-950">
                 Strategic planning workspace
               </div>
-              <div className="mt-2 max-w-3xl text-sm leading-7 text-gray-600 sm:text-base">
-                Use this page for portfolio-level planning views. Start with tool investments today,
-                then extend into workforce mix, role coverage, and delivery composition over time.
-              </div>
             </div>
 
             <button
@@ -719,7 +1167,28 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
             </button>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="mt-5 rounded-[2rem] border border-gray-200 bg-white/90 px-5 py-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Strategic Summary
+                </div>
+                <div className="mt-1 text-sm font-semibold text-gray-900">
+                  Current portfolio planning signals across tools, workforce, delivery, and savings scenarios.
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                  {entryMode === "local" ? "Local mode data" : "Latest saved state"}
+                </div>
+                <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
+                  {loading ? "Refreshing..." : `Refreshed ${refreshedLabel}`}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {STRATEGIC_MODULES.map((module) => {
               const active = module.id === strategicSection;
               return (
@@ -734,11 +1203,13 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
                       : module.accent,
                   ].join(" ")}
                 >
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                    {active ? "Active Module" : "Strategic Module"}
-                  </div>
-                  <div className="mt-2 text-xl font-black tracking-tight text-gray-950">
-                    {module.label}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-lg font-black tracking-tight text-gray-950">
+                      {module.label}
+                    </div>
+                    <div className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
+                      {active ? "Active" : "Module"}
+                    </div>
                   </div>
                   <div className="mt-2 text-sm text-gray-600">{module.description}</div>
                 </button>
@@ -749,7 +1220,8 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
           {(
             strategicSection === "tool-investments" ||
             strategicSection === "workforce-mix" ||
-            strategicSection === "delivery-composition"
+            strategicSection === "delivery-composition" ||
+            strategicSection === "savings-levers"
           ) ? (
             <>
           <div className="mt-6 flex flex-wrap gap-2">
@@ -1180,14 +1652,51 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
               />
             </div>
           </div>
-          ) : (
-          <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_320px]">
+          ) : strategicSection === "delivery-composition" ? (
+          <div className="mt-8">
             <div className="space-y-5">
               <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
                 <div className="text-sm font-bold text-gray-900">{activeModule.title}</div>
                 <div className="mt-1 text-xs font-semibold text-gray-500">
                   Delivery composition highlights execution balance only: build vs run posture,
                   role-tier distribution, and benchmark-based risk signals across the selected view.
+                </div>
+              </div>
+
+              <div
+                className={[
+                  "rounded-[2rem] border p-5 shadow-sm",
+                  deliveryComposition.overallStatusTone === "critical"
+                    ? "border-rose-200 bg-rose-50/90"
+                    : deliveryComposition.overallStatusTone === "watch"
+                      ? "border-amber-200 bg-amber-50/90"
+                      : "border-emerald-200 bg-emerald-50/90",
+                ].join(" ")}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Strategic Summary
+                    </div>
+                    <div className="mt-1 text-2xl font-black tracking-tight text-gray-950">
+                      {deliveryComposition.overallStatusLabel}
+                    </div>
+                  </div>
+                  <div
+                    className={[
+                      "rounded-full px-3 py-1 text-xs font-semibold ring-1",
+                      deliveryComposition.overallStatusTone === "critical"
+                        ? "bg-rose-100 text-rose-700 ring-rose-200"
+                        : deliveryComposition.overallStatusTone === "watch"
+                          ? "bg-amber-100 text-amber-700 ring-amber-200"
+                          : "bg-emerald-100 text-emerald-700 ring-emerald-200",
+                    ].join(" ")}
+                  >
+                    {deliveryComposition.benchmarkStatus}
+                  </div>
+                </div>
+                <div className="mt-2 text-sm font-medium text-gray-700">
+                  {deliveryComposition.overallStatusDetail}
                 </div>
               </div>
 
@@ -1204,6 +1713,14 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
                     </div>
                     <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
                       {deliveryComposition.benchmarkStatus}
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">
+                      Top Risk Driver
+                    </div>
+                    <div className="mt-1 text-base font-black tracking-tight text-gray-950">
+                      {deliveryComposition.topRiskDriver}
                     </div>
                   </div>
 
@@ -1269,12 +1786,14 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
                     {deliveryComposition.roleTiers.map((tier, index) => {
                       const maxCount = Math.max(1, ...deliveryComposition.roleTiers.map((item) => item.count));
                       const width = 44 + (tier.count / maxCount) * 56;
-                      const tint =
-                        index % 3 === 0
-                          ? "bg-violet-100 text-violet-800"
-                          : index % 3 === 1
-                            ? "bg-sky-100 text-sky-800"
-                            : "bg-amber-100 text-amber-800";
+                      const tints = [
+                        "bg-rose-100 text-rose-800",
+                        "bg-sky-100 text-sky-800",
+                        "bg-amber-100 text-amber-800",
+                        "bg-violet-100 text-violet-800",
+                        "bg-emerald-100 text-emerald-800",
+                      ];
+                      const tint = tints[index % tints.length];
                       return (
                         <div key={tier.label} className="group relative flex items-center gap-3">
                           <div className="w-40 text-xs font-semibold text-gray-600">{tier.label}</div>
@@ -1367,6 +1886,18 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
                           </div>
                         </div>
 
+                        <div className="mt-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-gray-200">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                            Top Tool Cost
+                          </div>
+                          <div className="mt-1 text-sm font-bold text-gray-950">
+                            {program.topTool?.name || "No tool data"}
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-gray-600">
+                            {program.topTool ? fmtCurrency(program.topTool.total) : "No tracked spend"}
+                          </div>
+                        </div>
+
                         <div className="mt-3 text-xs font-medium text-gray-600">
                           {program.riskSignals[0] || "Composition is balanced for the selected scope."}
                         </div>
@@ -1375,63 +1906,259 @@ export default function TechStackPage({ onBack, entryMode = "google" }) {
                   })}
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <InsightTile
-                label="Benchmark Status"
-                value={loading ? "..." : deliveryComposition.benchmarkStatus}
-                sub="Current developer-to-QA benchmark position"
-                accent="emerald"
-              />
-              <InsightTile
-                label="Dev-to-QA Ratio"
-                value={loading ? "..." : deliveryComposition.ratio}
-                sub="Current developer-to-QA mix across the selected view"
-                accent="violet"
-              />
-              <InsightTile
-                label="Primary Role Layer"
-                value={loading ? "..." : deliveryComposition.topRoleTier?.label || "None"}
-                sub={
-                  loading
-                    ? "Reviewing role layers"
-                    : deliveryComposition.topRoleTier
-                      ? `${deliveryComposition.topRoleTier.count} roles in the leading layer`
-                      : "No role metadata saved"
-                }
-                accent="blue"
-              />
-              <InsightTile
-                label="Attention Program"
-                value={loading ? "..." : deliveryComposition.attentionProgram?.label || "None"}
-                sub="Program with the highest concentration of current delivery watchouts"
-                accent="amber"
-              />
-              <InsightTile
-                label="Average External Reliance"
-                value={
-                  loading
-                    ? "..."
-                    : `${clampPctDisplay(deliveryComposition.averageExternalReliance)}%`
-                }
-                sub="Average external-weighted delivery share across the selected programs"
-                accent="amber"
-              />
-
-              <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  Delivery Risk Signals
-                </div>
-                <div className="mt-3 space-y-2">
-                  {deliveryComposition.riskSignals.map((signal, index) => (
-                    <div
-                      key={`${signal}-${index}`}
-                      className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700"
-                    >
-                      {signal}
+              <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Delivery Signals
                     </div>
-                  ))}
+                    <div className="mt-1 text-sm font-semibold text-gray-900">
+                      Leadership callouts generated from benchmark, sourcing, and role concentration
+                    </div>
+                  </div>
+                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                    {deliveryComposition.signalCards.length} active signals
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {deliveryComposition.signalCards.map((signal, index) => {
+                    const toneClass =
+                      signal.tone === "critical"
+                        ? "border-rose-200 bg-rose-50/90"
+                        : signal.tone === "warning"
+                          ? "border-amber-200 bg-amber-50/90"
+                          : signal.tone === "watch"
+                            ? "border-violet-200 bg-violet-50/90"
+                            : "border-emerald-200 bg-emerald-50/90";
+                    const markerClass =
+                      signal.tone === "critical"
+                        ? "bg-rose-500"
+                        : signal.tone === "warning"
+                          ? "bg-amber-500"
+                          : signal.tone === "watch"
+                            ? "bg-violet-500"
+                            : "bg-emerald-500";
+
+                    return (
+                      <div
+                        key={`${signal.title}-${index}`}
+                        className={["rounded-2xl border p-4 shadow-sm", toneClass].join(" ")}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={["mt-1 h-2.5 w-2.5 shrink-0 rounded-full", markerClass].join(" ")} />
+                          <div className="min-w-0">
+                            <div className="text-sm font-black tracking-tight text-gray-950">
+                              {signal.title}
+                            </div>
+                            <div className="mt-1 text-sm text-gray-700">{signal.detail}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm font-medium text-gray-600">
+                  Use these signals as the quick-read summary here, then drill deeper in AI Advisor if you need narrative follow-up.
+                </div>
+              </div>
+            </div>
+          </div>
+          ) : (
+          <div className="mt-8">
+            <div className="space-y-5">
+              <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
+                <div className="text-sm font-bold text-gray-900">{activeModule.title}</div>
+                <div className="mt-1 text-xs font-semibold text-gray-500">
+                  Use these planning levers to identify modest savings paths that preserve delivery posture.
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                        Savings Target
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-gray-900">
+                        Set the savings goal you want this view to test
+                      </div>
+                    </div>
+
+                    <div className="w-full max-w-xs">
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                        Target Amount
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={savingsTargetInput}
+                        onChange={(e) => setSavingsTargetInput(e.target.value)}
+                        onBlur={() => setSavingsTargetInput(String(parseWholeNumberInput(savingsTargetInput)))}
+                        className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-lg font-bold text-gray-950 outline-none focus:ring-2 focus:ring-gray-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {SAVINGS_MODES.map((mode) => {
+                      const active = savingsMode === mode.id;
+                      return (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          onClick={() => setSavingsMode(mode.id)}
+                          className={[
+                            "rounded-full px-4 py-2 text-sm font-semibold transition",
+                            active
+                              ? "bg-slate-900 text-white"
+                              : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                          ].join(" ")}
+                        >
+                          {mode.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                        Potential Savings
+                      </div>
+                      <div className="mt-1 text-2xl font-black tracking-tight text-gray-950">
+                        {fmtCurrency(savingsLevers.totalPotential)}
+                      </div>
+                      <div className="mt-1 text-xs font-medium text-gray-600">
+                        Sum of the recommended levers listed below
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50/80 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+                        Target Coverage
+                      </div>
+                      <div className="mt-1 text-2xl font-black tracking-tight text-gray-950">
+                        {savingsLevers.coveragePct}%
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">
+                        Remaining Gap
+                      </div>
+                      <div className="mt-1 text-2xl font-black tracking-tight text-gray-950">
+                        {fmtCurrency(savingsLevers.remainingGap)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    Planning Note
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-gray-900">
+                    {savingsLevers.modeLabel} uses a distinct logic profile for how aggressively this page proposes savings.
+                  </div>
+                  <div className="mt-3 rounded-2xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm text-gray-600">
+                    The first suggestions are low-disruption levers. If your target exceeds those, the view adds second-pass options with progressively higher savings reach.
+                  </div>
+                  <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm font-medium text-amber-900">
+                    High-risk programs are excluded from external savings recommendations in this view.
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      No-Regret Actions
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-gray-900">
+                      Safe first-pass moves that protect delivery while opening immediate savings room
+                    </div>
+                  </div>
+                  <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                    {noRegretSuggestions.length} low-risk actions
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  {noRegretSuggestions.length ? (
+                    noRegretSuggestions.map((item, index) => (
+                      <div
+                        key={`no-regret-${item.title}-${index}`}
+                        className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4 shadow-sm"
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                          {item.lane}
+                        </div>
+                        <div className="mt-2 text-base font-black tracking-tight text-gray-950">
+                          {item.title}
+                        </div>
+                        <div className="mt-2 text-xl font-black tracking-tight text-gray-950">
+                          {fmtCurrency(item.savings)}
+                        </div>
+                        <div className="mt-2 text-sm text-gray-700">{item.detail}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm text-gray-600 lg:col-span-3">
+                      No low-risk savings actions are currently available for the selected view.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[2rem] border border-gray-200 bg-white/90 p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Recommended Savings Levers
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-gray-900">
+                      Logic-based cost reduction ideas that aim to preserve delivery continuity
+                    </div>
+                  </div>
+                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                    {savingsLevers.suggestions.length} suggestions
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                  {savingsLevers.suggestions.map((item, index) => {
+                    const tint =
+                      item.lane === "Tools"
+                        ? "border-sky-100 bg-sky-50/80"
+                        : item.lane === "External"
+                          ? "border-amber-100 bg-amber-50/80"
+                          : item.lane === "Guardrail"
+                            ? "border-slate-200 bg-slate-50/90"
+                          : "border-emerald-100 bg-emerald-50/80";
+                    return (
+                      <div
+                        key={`${item.title}-${index}`}
+                        className={["rounded-3xl border p-4 shadow-sm", tint].join(" ")}
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                          {item.lane}
+                        </div>
+                        <div className="mt-2 text-lg font-black tracking-tight text-gray-950">
+                          {item.title}
+                        </div>
+                        <div className="mt-2 text-2xl font-black tracking-tight text-gray-950">
+                          {fmtCurrency(item.savings)}
+                        </div>
+                        <div className="mt-2 inline-flex rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-600 ring-1 ring-gray-200">
+                          {item.risk} disruption
+                        </div>
+                        <div className="mt-2 text-sm text-gray-700">{item.detail}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
