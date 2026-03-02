@@ -206,11 +206,11 @@ export default function App() {
 
   if (!entryMode) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_18%_18%,_#f8fafc_0%,_#ede9fe_34%,_#dbeafe_70%,_#d1fae5_100%)] text-gray-900">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_18%_18%,_#1f2937_0%,_#0f172a_42%,_#172554_72%,_#082f49_100%)] text-white">
         <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-10">
-          <div className="rounded-[2rem] border border-white/70 bg-white/35 p-8 shadow-2xl shadow-slate-200/70 backdrop-blur-xl sm:p-12">
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-8 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-12">
             <div className="max-w-4xl">
-              <div className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-6 py-3 text-base font-black uppercase tracking-[0.32em] text-gray-700 shadow-sm sm:text-lg">
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-7 py-3 text-lg font-black uppercase tracking-[0.34em] text-white shadow-lg shadow-black/15 sm:text-xl">
                 Forecast Companion
               </div>
 
@@ -219,7 +219,7 @@ export default function App() {
                   type="button"
                   disabled={authBusy}
                   onClick={handleGoogleEntry}
-                  className="rounded-2xl bg-gray-950 px-6 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                  className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:bg-slate-800 disabled:opacity-60"
                 >
                   {authBusy
                     ? "Signing in…"
@@ -231,18 +231,18 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setEntryMode("local")}
-                  className="rounded-2xl border border-gray-300 bg-white/90 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-white"
+                  className="rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white hover:bg-white/15"
                 >
                   Continue in Local Mode
                 </button>
               </div>
 
               {user ? (
-                <div className="mt-4 text-sm font-medium text-gray-600">
+                <div className="mt-4 text-sm font-medium text-slate-300">
                   Signed in as {user.displayName || user.email}
                 </div>
               ) : (
-                <div className="mt-4 text-sm text-gray-500">
+                <div className="mt-4 text-sm text-slate-300">
                   Google sign-in enables saved cloud-backed access. Local mode keeps the current
                   lightweight workflow available without sign-in.
                 </div>
@@ -250,33 +250,33 @@ export default function App() {
             </div>
 
             <div className="mt-10 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">
+              <div className="rounded-2xl border border-orange-400/20 bg-white/8 p-5 shadow-lg shadow-black/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-orange-300">
                   Signed-In Mode
                 </div>
-                <div className="mt-2 text-lg font-bold text-gray-900">Cloud-backed access</div>
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-lg font-bold text-white">Cloud-backed access</div>
+                <div className="mt-2 text-sm text-slate-300">
                   Use Google sign-in when you want account-aware access and a more durable saved
                   experience.
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <div className="rounded-2xl border border-sky-400/20 bg-white/8 p-5 shadow-lg shadow-black/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-sky-300">
                   Local Mode
                 </div>
-                <div className="mt-2 text-lg font-bold text-gray-900">Fast local entry</div>
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-lg font-bold text-white">Fast local entry</div>
+                <div className="mt-2 text-sm text-slate-300">
                   Keep working with the current local-first behavior when you need immediate
                   access without signing in.
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white/80 p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              <div className="rounded-2xl border border-white/10 bg-white/8 p-5 shadow-lg shadow-black/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                   What You’ll Enter
                 </div>
-                <div className="mt-2 text-sm text-gray-700">
+                <div className="mt-2 text-sm text-slate-300">
                   Internal staffing, Tools & Services, External vendors, Trends, Change Log, and
                   AI guidance in one shared workspace.
                 </div>

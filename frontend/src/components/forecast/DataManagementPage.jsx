@@ -2,6 +2,7 @@ import { useState } from "react";
 import ImportExcelModal from "./ImportExcelModal";
 import { downloadForecastTemplate } from "../../utils/excel/downloadForecastTemplate";
 import { exportForecastWorkbook } from "../../utils/excel/exportWorkbook";
+import { generatePortfolioReport } from "../../utils/report/generatePortfolioReport";
 import {
   loadLocalProgramState,
   loadProgramState,
@@ -28,6 +29,28 @@ function adaptImportedProgramToState(p) {
 export default function DataManagementPage({ onBack, entryMode }) {
   const [importOpen, setImportOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+  async function loadAllProgramStates() {
+    const all = {};
+    for (const pk of PROGRAM_KEYS) {
+      all[pk] =
+        entryMode === "local"
+          ? loadLocalProgramState(pk) || {}
+          : (await loadProgramState(pk)) || {};
+    }
+    return all;
+  }
+
+  async function handleGenerateReport() {
+    try {
+      setIsGeneratingReport(true);
+      const all = await loadAllProgramStates();
+      generatePortfolioReport(all);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }
 
   async function clearAllData() {
     const ok = confirm(
@@ -102,13 +125,7 @@ export default function DataManagementPage({ onBack, entryMode }) {
           <button
             type="button"
             onClick={async () => {
-              const all = {};
-              for (const pk of PROGRAM_KEYS) {
-                all[pk] =
-                  entryMode === "local"
-                    ? loadLocalProgramState(pk) || {}
-                    : (await loadProgramState(pk)) || {};
-              }
+              const all = await loadAllProgramStates();
               exportForecastWorkbook(all, { fileName: "forecast-export.xlsx" });
             }}
             className="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-left shadow-sm transition hover:bg-emerald-100"
@@ -135,7 +152,34 @@ export default function DataManagementPage({ onBack, entryMode }) {
           </button>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-rose-200 bg-[linear-gradient(135deg,_rgba(255,241,242,0.95),_rgba(255,255,255,0.98))] p-6 shadow-sm">
+        <button
+          type="button"
+          onClick={handleGenerateReport}
+          disabled={isGeneratingReport}
+          className="mt-6 w-full rounded-3xl border border-slate-200 bg-[linear-gradient(135deg,_rgba(248,250,252,0.96),_rgba(239,246,255,0.98))] p-6 text-left shadow-sm transition hover:bg-[linear-gradient(135deg,_rgba(241,245,249,0.98),_rgba(219,234,254,0.98))] disabled:opacity-70"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-3xl">
+              <div className="text-lg font-extrabold text-slate-900">
+                Download Report
+              </div>
+              <div className="mt-1 text-sm font-semibold text-slate-700">
+                Build a landscape leadership report across Connected, TRE, and CSC with
+                executive metrics, program snapshots, workforce coverage, delivery posture, and
+                budget variance for review.
+              </div>
+              <div className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                Downloads a print-ready report file directly from the browser
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-extrabold text-slate-900 shadow-sm">
+              {isGeneratingReport ? "Preparing Report..." : "Download Report"}
+            </div>
+          </div>
+        </button>
+
+        <div className="mt-8 rounded-3xl border border-rose-200 bg-[linear-gradient(135deg,_rgba(255,241,242,0.95),_rgba(255,255,255,0.98))] p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-2xl">
               <div className="text-lg font-extrabold text-rose-900">

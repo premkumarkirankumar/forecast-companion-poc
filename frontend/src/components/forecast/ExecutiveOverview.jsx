@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { loadLocalProgramState, loadProgramState } from "../../data/firestorePrograms";
 import { MONTHS } from "../../data/hub";
 
+const PORTFOLIO_INSIGHTS_URL =
+  "https://us-central1-forecast-poc-488523.cloudfunctions.net/portfolioInsights";
+
 const PROGRAMS = [
   { id: "connected", label: "Connected", accent: "border-orange-200 bg-orange-50/70" },
   { id: "tre", label: "TRE", accent: "border-purple-200 bg-purple-50/70" },
@@ -63,6 +66,57 @@ function summarizeProgram(state) {
   };
 }
 
+function renderEmphasizedText(text) {
+  const valuePattern = /(\$[\d,]+(?:\.\d+)?|\b\d+(?:\.\d+)?\s?:\s?1\b|\b\d+(?:\.\d+)?%)/g;
+  const parts = String(text || "").split(valuePattern);
+  return parts.map((part, index) => {
+    if (!part) return null;
+    if (valuePattern.test(part)) {
+      valuePattern.lastIndex = 0;
+      return (
+        <span key={`${part}-${index}`} className="text-[1.08em] font-extrabold tracking-tight text-gray-950">
+          {part}
+        </span>
+      );
+    }
+    valuePattern.lastIndex = 0;
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
+}
+
+function parseInsightPreview(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return { headline: "", sections: [] };
+
+  const lines = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const knownTitles = ["Current posture", "Delivery view", "Leadership focus"];
+  const headline = lines[0] || "";
+  const sections = [];
+  let current = null;
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (knownTitles.includes(line)) {
+      if (current) sections.push(current);
+      current = { title: line, body: "" };
+      continue;
+    }
+
+    if (!current) {
+      current = { title: "Current posture", body: line };
+    } else {
+      current.body = current.body ? `${current.body} ${line}` : line;
+    }
+  }
+
+  if (current) sections.push(current);
+  return { headline, sections };
+}
+
 function MetricTile({ label, value, sub, footer, tone = "default" }) {
   const toneClass =
     tone === "primary"
@@ -85,6 +139,49 @@ function MetricTile({ label, value, sub, footer, tone = "default" }) {
   );
 }
 
+function buildLocalFallbackInsight(portfolio, summaries) {
+  const topProgram = portfolio?.topProgram;
+  const externalLeader = portfolio?.externalLeader?.program;
+  const riskLevel =
+    (portfolio?.externalLeader?.ratio ?? 0) >= 0.75
+      ? "At Risk"
+      : (portfolio?.externalLeader?.ratio ?? 0) >= 0.6
+        ? "Watch"
+        : "Healthy";
+
+  const headline = `${riskLevel} portfolio signal`;
+  const overview = topProgram
+    ? `${topProgram.label} currently carries the largest tracked spend at ${fmtCurrency(
+        topProgram.summary.totalForecast
+      )}, while total tracked spend across the portfolio stands at ${fmtCurrency(
+        portfolio.totalForecast
+      )}.`
+    : "No saved forecast data is available yet.";
+
+  const deliveryView = externalLeader
+    ? `${externalLeader.label} is currently the most externally weighted program, which keeps delivery posture watchful while external spend remains at ${fmtCurrency(
+        portfolio.externalTotal
+      )}.`
+    : `External spend stands at ${fmtCurrency(
+        portfolio.externalTotal
+      )}, and delivery posture can be reviewed against current staffing mix.`;
+
+  const recommendedFocus = portfolio?.toolsTotal
+    ? `Leaders should review recurring tool investment at ${fmtCurrency(
+        portfolio.toolsTotal
+      )} alongside ${portfolio?.internalCount || 0} named internal FTE entries to confirm the current spend mix still supports delivery priorities.`
+    : `Leaders should review the current external and staffing mix to confirm delivery priorities remain covered.`;
+
+  return {
+    insight: {
+      headline,
+      overview,
+      deliveryView,
+      recommendedFocus,
+    },
+  };
+}
+
 export default function ExecutiveOverview({
   entryMode = "google",
   selectedProgram,
@@ -94,6 +191,10 @@ export default function ExecutiveOverview({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statesByProgram, setStatesByProgram] = useState({});
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightError, setInsightError] = useState("");
+  const [generatedInsight, setGeneratedInsight] = useState(null);
+  const [typedInsight, setTypedInsight] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +291,101 @@ export default function ExecutiveOverview({
     };
   }, [summaries]);
 
+  const insightBody = useMemo(() => {
+    if (!generatedInsight?.insight) return "";
+
+    const lines = [];
+    if (generatedInsight.insight.headline) {
+      lines.push(generatedInsight.insight.headline);
+    }
+    if (generatedInsight.insight.overview) {
+      lines.push(`Current posture\n${generatedInsight.insight.overview}`);
+    }
+    if (generatedInsight.insight.deliveryView) {
+      lines.push(`Delivery view\n${generatedInsight.insight.deliveryView}`);
+    }
+    if (generatedInsight.insight.recommendedFocus) {
+      lines.push(`Leadership focus\n${generatedInsight.insight.recommendedFocus}`);
+    }
+
+    return lines.join("\n\n");
+  }, [generatedInsight]);
+
+  const parsedInsight = useMemo(() => parseInsightPreview(typedInsight), [typedInsight]);
+
+  const leadershipWatchouts = useMemo(() => {
+    const watchouts = [];
+    if ((portfolio.externalLeader?.ratio ?? 0) >= 0.7) {
+      watchouts.push(
+        `${portfolio.externalLeader?.program?.label || "A program"} remains externally weighted and should be reviewed for delivery resilience.`
+      );
+    }
+    if (portfolio.toolsTotal >= portfolio.externalTotal && portfolio.toolsTotal > 0) {
+      watchouts.push(
+        `Recurring tool investment at ${fmtCurrency(portfolio.toolsTotal)} is the largest controllable spend line in the current portfolio mix.`
+      );
+    }
+    if (portfolio.internalCount > 0) {
+      watchouts.push(
+        `${portfolio.internalCount} named internal FTE entries should be reviewed against current delivery priorities before shifting spend.`
+      );
+    }
+    return watchouts.slice(0, 2);
+  }, [portfolio]);
+
+  useEffect(() => {
+    if (!insightBody) {
+      setTypedInsight("");
+      return;
+    }
+
+    let index = 0;
+    setTypedInsight("");
+
+    const timer = window.setInterval(() => {
+      index += 14;
+      setTypedInsight(insightBody.slice(0, index));
+      if (index >= insightBody.length) {
+        window.clearInterval(timer);
+      }
+    }, 20);
+
+    return () => window.clearInterval(timer);
+  }, [insightBody]);
+
+  async function handleGenerateInsights() {
+    if (entryMode === "local") {
+      setInsightError("Generate Insights uses the latest saved cloud data and is available in signed-in mode.");
+      return;
+    }
+
+    setInsightLoading(true);
+    setInsightError("");
+
+    try {
+      const response = await fetch(PORTFOLIO_INSIGHTS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "Unable to generate insights.");
+      }
+
+      setGeneratedInsight(payload);
+    } catch (e) {
+      console.error("Generate Insights failed:", e);
+      setGeneratedInsight(buildLocalFallbackInsight(portfolio, summaries));
+      setInsightError("");
+    } finally {
+      setInsightLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#f8fafc,_#eef2ff_38%,_#dbeafe_68%,_#ecfccb_100%)]">
       <div className="mx-auto w-full max-w-7xl px-6 py-8">
@@ -220,6 +416,12 @@ export default function ExecutiveOverview({
           {error ? (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               {error}
+            </div>
+          ) : null}
+
+          {insightError ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {insightError}
             </div>
           ) : null}
 
@@ -381,47 +583,79 @@ export default function ExecutiveOverview({
             })}
           </div>
 
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-3xl border border-gray-200 bg-gray-50/90 p-5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Top Forecast Driver
+          <div className="mt-8 rounded-3xl border border-slate-200 bg-slate-50/85 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Portfolio Focus Summary
+                </div>
+                <div className="mt-2 text-lg font-bold text-gray-900">
+                  Generated from the latest saved portfolio metrics
+                </div>
               </div>
-              <div className="mt-3 text-2xl font-black tracking-tight text-gray-950">
-                {loading
-                  ? "Loading..."
-                  : portfolio.topProgram
-                    ? portfolio.topProgram.label
-                    : "No program data"}
-              </div>
-              <div className="mt-2 text-sm text-gray-600">
-                {loading
-                  ? "Generating the latest summary..."
-                  : portfolio.topProgram
-                    ? `${portfolio.topProgram.label} currently carries the highest combined forecast at ${fmtCurrency(
-                        portfolio.topProgram.summary.totalForecast
-                      )}.`
-                    : "No saved forecast data was found yet."}
-              </div>
+              <button
+                type="button"
+                onClick={handleGenerateInsights}
+                disabled={insightLoading || entryMode === "local"}
+                className={[
+                  "rounded-2xl px-5 py-3 text-sm font-semibold transition",
+                  entryMode === "local"
+                    ? "cursor-not-allowed border border-gray-200 bg-gray-100 text-gray-500"
+                    : "bg-slate-900 text-white hover:bg-slate-800",
+                  insightLoading ? "opacity-70" : "",
+                ].join(" ")}
+              >
+                {insightLoading ? "Generating…" : "Generate Insights"}
+              </button>
             </div>
 
-            <div className="rounded-3xl border border-gray-200 bg-gray-50/90 p-5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                External Dependency
+            <div className="mt-5 rounded-2xl border border-white bg-white px-5 py-5 shadow-sm">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Insight Output
               </div>
-              <div className="mt-3 text-2xl font-black tracking-tight text-gray-950">
-                {loading
-                  ? "Loading..."
-                  : portfolio.externalLeader?.program
-                    ? portfolio.externalLeader.program.label
-                    : "No program data"}
-              </div>
-              <div className="mt-2 text-sm text-gray-600">
-                {loading
-                  ? "Reviewing contractor and SOW mix..."
-                  : portfolio.externalLeader?.program
-                    ? `${portfolio.externalLeader.program.label} shows the highest external-weighted forecast mix right now.`
-                    : "No saved external data was found yet."}
-              </div>
+              {insightLoading ? (
+                <div className="mt-4 min-h-[180px] text-base leading-7 text-gray-700">
+                  Generating insights...
+                  <span className="ml-1 inline-block h-5 w-0.5 animate-pulse bg-gray-500 align-middle" />
+                </div>
+              ) : parsedInsight.headline ? (
+                <div className="mt-4 min-h-[180px]">
+                  <div className="text-[2rem] font-black tracking-tight text-gray-950">
+                    {parsedInsight.headline}
+                  </div>
+                  <div className="mt-4 space-y-4">
+                    {parsedInsight.sections.map((section) => (
+                      <div
+                        key={section.title}
+                        className="rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3"
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                          {section.title}
+                        </div>
+                        <div className="mt-1.5 text-[1.03rem] leading-7 text-gray-700">
+                          {renderEmphasizedText(section.body)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {leadershipWatchouts.length ? (
+                    <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
+                        What leaders should watch
+                      </div>
+                      <div className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+                        {leadershipWatchouts.map((item) => (
+                          <div key={item}>{renderEmphasizedText(item)}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-4 min-h-[180px] text-base leading-7 text-gray-700">
+                  Click Generate Insights to build a concise portfolio summary from the latest saved data.
+                </div>
+              )}
             </div>
           </div>
         </div>
