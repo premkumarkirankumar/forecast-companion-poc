@@ -25,17 +25,18 @@ const PROGRAMS = [
 ];
 
 const HEADERS = {
-  internal: ["FTE Name", "Run %", "Grow %"],
+  internal: ["FTE Name", "Role", "Run %", "Grow %"],
   tns: ["Tool / Service Name", "Total Per Year", "MS %"],
   contractors: [
     "Contractor Name",
+    "Role",
     "Rate Per Hour",
     "Hours Per Week",
     "Weeks Per Year",
     "MS %",
     "NF %",
   ],
-  sows: ["SOW Name", "Total Per Year", "MS %", "NF %"],
+  sows: ["SOW Name", "Total Per Year", "Developers Count", "QA Count", "MS %", "NF %"],
 };
 
 function sheetName(prefix, area) {
@@ -83,6 +84,7 @@ function buildInternalRows(state) {
   const rows = items
     .map((it) => [
       String(it?.name ?? "").trim(),
+      String(it?.role ?? "").trim(),
       clampPct(it?.runPct ?? it?.run ?? it?.runPercent ?? 0),
       clampPct(it?.growthPct ?? it?.growPct ?? it?.grow ?? it?.growPercent ?? 0),
     ])
@@ -108,6 +110,7 @@ function buildContractorRows(state) {
   const rows = items
     .map((it) => {
       const name = String(it?.name ?? "").trim();
+      const role = String(it?.role ?? "").trim();
       const rate = numOr0(it?.ratePerHour);
       const hpw = numOr0(it?.hoursPerWeek);
       const wpy = numOr0(it?.weeksPerYear);
@@ -119,7 +122,7 @@ function buildContractorRows(state) {
       const msPct = clampPct(it?.msPct ?? 100);
       const nfPct = clampPct(it?.nfPct ?? 0);
 
-      return [name, rate, hpw, weeks, msPct, nfPct];
+      return [name, role, rate, hpw, weeks, msPct, nfPct];
     })
     .filter((r) => r[0]);
   return [HEADERS.contractors, ...rows];
@@ -131,9 +134,15 @@ function buildSowRows(state) {
     .map((it) => {
       const name = String(it?.name ?? "").trim();
       const totalPerYear = computeYearTotal(it);
+      const developersCount =
+        it?.totalDevelopers === null || it?.totalDevelopers === undefined
+          ? ""
+          : numOr0(it.totalDevelopers);
+      const qaCount =
+        it?.totalQa === null || it?.totalQa === undefined ? "" : numOr0(it.totalQa);
       const msPct = clampPct(it?.msPct ?? 0);
       const nfPct = clampPct(it?.nfPct ?? 0);
-      return [name, totalPerYear, msPct, nfPct];
+      return [name, totalPerYear, developersCount, qaCount, msPct, nfPct];
     })
     .filter((r) => r[0]);
   return [HEADERS.sows, ...rows];

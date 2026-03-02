@@ -341,7 +341,7 @@ export default function ToolsServicesDetails({
             <div className={subtlePanel}>
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
+                        <div className="text-sm font-semibold text-gray-900">Tools & Services — Add Entry</div>
                         <div className="mt-1 text-xs text-gray-600">
                             Add Tool/Service → set yearly target → edit MS by month (auto rebalances remaining months).
                         </div>

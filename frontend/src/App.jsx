@@ -7,6 +7,8 @@ import ChangelogPage from "./components/forecast/ChangelogPage";
 import ToolsServicesDetails from "./components/forecast/ToolsServicesDetails";
 import TrendsPage from "./components/forecast/TrendsPage";
 import DataManagementPage from "./components/forecast/DataManagementPage";
+import ExecutiveOverview from "./components/forecast/ExecutiveOverview";
+import TechStackPage from "./components/forecast/TechStackPage";
 import AuthBar from "./components/AuthBar";
 import AssistantDrawer from "./components/ai/AssistantDrawer";
 import { auth, googleProvider } from "./firebase";
@@ -51,7 +53,7 @@ const seedTns = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState("dashboard"); // dashboard | changelog | trends | data
+  const [page, setPage] = useState("dashboard"); // dashboard | executive | changelog | trends | techstack | data
   const [user, setUser] = useState(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [entryMode, setEntryMode] = useState(() => {
@@ -92,6 +94,7 @@ export default function App() {
   useEffect(() => {
     if (user && entryMode === "local") {
       setEntryMode("google");
+      setPage("executive");
     }
   }, [user, entryMode]);
 
@@ -174,6 +177,7 @@ export default function App() {
   async function handleGoogleEntry() {
     if (user) {
       setEntryMode("google");
+      setPage("executive");
       return;
     }
 
@@ -181,6 +185,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
       setEntryMode("google");
+      setPage("executive");
     } catch (e) {
       console.error("Google sign-in failed:", e);
       alert(e?.message || "Sign-in failed");
@@ -194,26 +199,27 @@ export default function App() {
     setEntryMode(null);
   }
 
+  function handleAuthEntry() {
+    setEntryMode("google");
+    setPage("executive");
+  }
+
   if (!entryMode) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_18%_18%,_#f8fafc_0%,_#ede9fe_34%,_#dbeafe_70%,_#d1fae5_100%)] text-gray-900">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_18%_18%,_#1f2937_0%,_#0f172a_42%,_#172554_72%,_#082f49_100%)] text-white">
         <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-10">
-          <div className="rounded-[2rem] border border-white/70 bg-white/35 p-8 shadow-2xl shadow-slate-200/70 backdrop-blur-xl sm:p-12">
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/35 p-8 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-12">
             <div className="max-w-4xl">
-              <div className="inline-flex items-center rounded-full border border-white/80 bg-white/90 px-5 py-2.5 text-sm font-bold uppercase tracking-[0.28em] text-gray-700 shadow-sm">
+              <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 px-7 py-3 text-lg font-black uppercase tracking-[0.34em] text-white shadow-lg shadow-black/15 sm:text-xl">
                 Forecast Companion
               </div>
-              <p className="mt-8 max-w-3xl text-lg leading-8 text-gray-700 sm:text-2xl">
-                Choose a signed-in cloud session for saved collaboration, or continue in local
-                mode to work directly in the browser with the current offline-friendly flow.
-              </p>
 
-              <div className="mt-10 flex flex-wrap gap-3">
+              <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   type="button"
                   disabled={authBusy}
                   onClick={handleGoogleEntry}
-                  className="rounded-2xl bg-gray-950 px-6 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
+                  className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 hover:bg-slate-800 disabled:opacity-60"
                 >
                   {authBusy
                     ? "Signing in…"
@@ -225,18 +231,18 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setEntryMode("local")}
-                  className="rounded-2xl border border-gray-300 bg-white/90 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-white"
+                  className="rounded-2xl border border-white/15 bg-white/10 px-6 py-3 text-sm font-semibold text-white hover:bg-white/15"
                 >
                   Continue in Local Mode
                 </button>
               </div>
 
               {user ? (
-                <div className="mt-4 text-sm font-medium text-gray-600">
+                <div className="mt-4 text-sm font-medium text-slate-300">
                   Signed in as {user.displayName || user.email}
                 </div>
               ) : (
-                <div className="mt-4 text-sm text-gray-500">
+                <div className="mt-4 text-sm text-slate-300">
                   Google sign-in enables saved cloud-backed access. Local mode keeps the current
                   lightweight workflow available without sign-in.
                 </div>
@@ -244,35 +250,35 @@ export default function App() {
             </div>
 
             <div className="mt-10 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-orange-700">
+              <div className="rounded-2xl border border-orange-400/20 bg-white/8 p-5 shadow-lg shadow-black/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-orange-300">
                   Signed-In Mode
                 </div>
-                <div className="mt-2 text-lg font-bold text-gray-900">Cloud-backed access</div>
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-lg font-bold text-white">Cloud-backed access</div>
+                <div className="mt-2 text-sm text-slate-300">
                   Use Google sign-in when you want account-aware access and a more durable saved
                   experience.
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-100 bg-white/80 p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <div className="rounded-2xl border border-sky-400/20 bg-white/8 p-5 shadow-lg shadow-black/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-sky-300">
                   Local Mode
                 </div>
-                <div className="mt-2 text-lg font-bold text-gray-900">Fast local entry</div>
-                <div className="mt-2 text-sm text-gray-600">
+                <div className="mt-2 text-lg font-bold text-white">Fast local entry</div>
+                <div className="mt-2 text-sm text-slate-300">
                   Keep working with the current local-first behavior when you need immediate
                   access without signing in.
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white/80 p-5 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              <div className="rounded-2xl border border-white/10 bg-white/8 p-5 shadow-lg shadow-black/10">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                   What You’ll Enter
                 </div>
-                <div className="mt-2 text-sm text-gray-700">
-                  Internal staffing, Tools & Services, External vendors, trends, change logs, and
-                  AI guidance remain exactly where they are after entry.
+                <div className="mt-2 text-sm text-slate-300">
+                  Internal staffing, Tools & Services, External vendors, Trends, Change Log, and
+                  AI guidance in one shared workspace.
                 </div>
               </div>
             </div>
@@ -308,11 +314,34 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-3 py-4">
-          <DataManagementPage onBack={() => setPage("dashboard")} />
+          <DataManagementPage onBack={() => setPage("dashboard")} entryMode={entryMode} />
         </div>
       </div>
     );
   }
+
+  if (page === "techstack") {
+    return <TechStackPage onBack={() => setPage("dashboard")} entryMode={entryMode} />;
+  }
+
+  if (page === "executive") {
+    return (
+      <ExecutiveOverview
+        entryMode={entryMode}
+        selectedProgram={selectedProgram}
+        onSelectProgram={setSelectedProgram}
+        onContinue={() => setPage("dashboard")}
+      />
+    );
+  }
+
+  const navButtonClass = (active) =>
+    [
+      "rounded-xl px-4 py-2 text-sm font-semibold transition duration-200 ease-out transform-gpu",
+      active
+        ? "bg-gray-900 text-white shadow-sm ring-1 ring-gray-900"
+        : "bg-white text-gray-900 hover:-translate-y-0.5 hover:scale-[1.03] hover:bg-sky-50 hover:text-sky-900 hover:shadow-md hover:ring-1 hover:ring-sky-200",
+    ].join(" ");
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -328,44 +357,55 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage("data")}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Data Management
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50/80 p-1.5">
+              <button
+                onClick={() => setPage("executive")}
+                className={navButtonClass(page === "executive")}
+              >
+                Executive Summary
+              </button>
 
-            <button
-              onClick={() => setAiOpen(true)}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              AI Advisor
-            </button>
+              <button
+                onClick={() => setPage("techstack")}
+                className={navButtonClass(page === "techstack")}
+              >
+                Strategic View
+              </button>
 
-            <button
-              onClick={() => setPage("trends")}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Trends
-            </button>
+              <button onClick={() => setAiOpen(true)} className={navButtonClass(aiOpen)}>
+                AI Advisor
+              </button>
 
-            <button
-              onClick={() => setPage("changelog")}
-              className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-            >
-              Change Log
-            </button>
+              <button
+                onClick={() => setPage("trends")}
+                className={navButtonClass(page === "trends")}
+              >
+                Trends
+              </button>
+            </div>
 
-            <button
-              onClick={returnToEntry}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-            >
-              Entry Options
-            </button>
+            <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-sm">
+              <button
+                onClick={() => setPage("changelog")}
+                className={navButtonClass(page === "changelog")}
+              >
+                Change Log
+              </button>
 
-            <AssistantDrawer programId={selectedProgram} />
-            <AuthBar onSignedOut={returnToEntry} />
+              <button
+                onClick={() => setPage("data")}
+                className={navButtonClass(page === "data")}
+              >
+                Data Management
+              </button>
+
+              <button onClick={returnToEntry} className={navButtonClass(false)}>
+                Entry Options
+              </button>
+            </div>
+
+            <AuthBar onSignedIn={handleAuthEntry} onSignedOut={returnToEntry} />
           </div>
         </div>
       </div>
@@ -376,6 +416,7 @@ export default function App() {
           <SummaryCards
             selectedProgram={selectedProgram}
             onProgramChange={setSelectedProgram}
+            entryMode={entryMode}
           />
         ) : (
           <ToolsServicesDetails items={tnsItems} setItems={setTnsItems} onLog={() => {}} />

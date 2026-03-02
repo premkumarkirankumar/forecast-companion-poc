@@ -1,6 +1,6 @@
 // frontend/src/components/forecast/TrendsPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { loadProgramState } from "../../data/firestorePrograms";
+import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
 import { MONTHS } from "../../data/hub";
 import { fmt } from "../../lib/forecast/format";
 
@@ -133,6 +133,46 @@ function InsightCard({ title, sub, items, whyDetails }) {
   );
 }
 
+function TrendNavCard({ title, summary, meta, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-all",
+        "hover:-translate-y-0.5 hover:shadow-md",
+        active
+          ? "border-gray-900 ring-2 ring-gray-900/10"
+          : "border-gray-200 hover:border-gray-300",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-extrabold text-gray-900">{title}</div>
+          <div className="mt-1 text-sm font-semibold text-gray-600">
+            {summary}
+          </div>
+        </div>
+        <span
+          className={[
+            "inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-extrabold transition-transform",
+            active
+              ? "border-gray-900 bg-gray-900 text-white rotate-180"
+              : "border-gray-200 bg-gray-50 text-gray-700",
+          ].join(" ")}
+        >
+          ▾
+        </span>
+      </div>
+      {meta ? (
+        <div className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+          {meta}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
 /* -----------------------------
    SVG Charts (no deps)
 ------------------------------ */
@@ -202,7 +242,7 @@ function StackedBars({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-extrabold text-gray-900">
-            Monthly total spend (stacked)
+            Monthly tracked spend
           </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
             External Contractors + External SOW + Tools & Services
@@ -998,7 +1038,7 @@ function RunRateProjectionChart({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-sm font-extrabold text-gray-900">
-            Run rate forecast projection (year-end)
+            Tracked spend projection (year-end)
           </div>
           <div className="mt-0.5 text-xs font-semibold text-gray-500">
             Projection based on the last 3 months trend • Band ±5%
@@ -1007,7 +1047,7 @@ function RunRateProjectionChart({
 
         <div className="text-right">
           <div className="text-xs font-semibold text-gray-600">
-            Projected year-end
+            Projected tracked spend
           </div>
           <div className="text-lg font-extrabold text-gray-900">
             {fmt(yearEnd?.projected ?? 0)}
@@ -1722,10 +1762,13 @@ export default function TrendsPage({
   const sowKey = `pfc.${programKey}.external.sow`;
   const tnsItemsKey = `pfc.${programKey}.tns.items`;
   const budgetKey = `pfc.${programKey}.budget.byMonth`;
+  const actualsKey = `pfc.${programKey}.actuals.byMonth`;
 
   // Month range (local to this page)
   const [startIdx, setStartIdx] = useState(0);
   const [endIdx, setEndIdx] = useState(MONTHS.length - 1);
+  const [activeTrend, setActiveTrend] = useState("projection");
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
   const normalized = useMemo(() => {
     const s = clamp(Number(startIdx), 0, MONTHS.length - 1);
@@ -1745,43 +1788,35 @@ export default function TrendsPage({
 
   // Pull data live from localStorage (and refresh on app writes)
   const [snapshot, setSnapshot] = useState(() => ({
-    internal: entryMode === "local" ? [] : loadArray(internalItemsKey),
-    contractors: entryMode === "local" ? [] : loadArray(contractorsKey),
-    sows: entryMode === "local" ? [] : loadArray(sowKey),
-    tns: entryMode === "local" ? [] : loadArray(tnsItemsKey),
-    budgetByMonth: entryMode === "local" ? emptyBudgetMap() : loadBudgetMap(budgetKey),
+    internal: loadArray(internalItemsKey),
+    contractors: loadArray(contractorsKey),
+    sows: loadArray(sowKey),
+    tns: loadArray(tnsItemsKey),
+    budgetByMonth: loadBudgetMap(budgetKey),
+    actualsByMonth: loadBudgetMap(actualsKey),
   }));
 
   useEffect(() => {
     let cancelled = false;
 
     function applySnapshot() {
-      if (entryMode === "local") {
-        setSnapshot({
-          internal: [],
-          contractors: [],
-          sows: [],
-          tns: [],
-          budgetByMonth: emptyBudgetMap(),
-        });
-        return;
-      }
-
       setSnapshot({
         internal: loadArray(internalItemsKey),
         contractors: loadArray(contractorsKey),
         sows: loadArray(sowKey),
         tns: loadArray(tnsItemsKey),
         budgetByMonth: loadBudgetMap(budgetKey),
+        actualsByMonth: loadBudgetMap(actualsKey),
       });
+      setLastRefreshedAt(new Date());
     }
 
-    if (entryMode === "local") {
-      applySnapshot();
-      return undefined;
-    }
+    async function refreshIfNeeded() {
+      if (entryMode === "local") {
+        if (!cancelled) applySnapshot();
+        return;
+      }
 
-    async function refresh() {
       try {
         await loadProgramState(programKey);
       } catch (e) {
@@ -1791,7 +1826,7 @@ export default function TrendsPage({
       }
     }
 
-    refresh();
+    refreshIfNeeded();
 
     window.addEventListener("pfc:storage", applySnapshot);
     window.addEventListener("pfc:autolog", applySnapshot);
@@ -1805,6 +1840,7 @@ export default function TrendsPage({
     };
   }, [
     budgetKey,
+    actualsKey,
     contractorsKey,
     entryMode,
     internalItemsKey,
@@ -1886,18 +1922,33 @@ export default function TrendsPage({
     return Array.isArray(snapshot.internal) ? snapshot.internal.length : 0;
   }, [snapshot.internal]);
 
+  const refreshedLabel = lastRefreshedAt
+    ? lastRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : "";
+  const loading = !lastRefreshedAt;
+
 
  // Budget input (optional)
   const [budgetDraft, setBudgetDraft] = useState(() => snapshot.budgetByMonth);
+  const [actualsDraft, setActualsDraft] = useState(() => snapshot.actualsByMonth);
 
   useEffect(() => {
     // keep draft in sync when program changes / storage changes
     setBudgetDraft(snapshot.budgetByMonth);
-  }, [snapshot.budgetByMonth]);
+    setActualsDraft(snapshot.actualsByMonth);
+  }, [snapshot.actualsByMonth, snapshot.budgetByMonth]);
 
-  function saveBudget(nextMap) {
+  async function saveBudget(nextMap) {
     localStorage.setItem(budgetKey, JSON.stringify(nextMap));
     window.dispatchEvent(new Event("pfc:storage"));
+
+    if (entryMode === "local") return;
+
+    try {
+      await saveProgramState(programKey, { budgetByMonth: nextMap });
+    } catch (e) {
+      console.error("Failed to save budget:", e);
+    }
   }
 
   function setBudgetForMonth(m, value) {
@@ -1915,6 +1966,36 @@ export default function TrendsPage({
     const next = Object.fromEntries(MONTHS.map((m) => [m, perMonth]));
     setBudgetDraft(next);
     saveBudget(next);
+  }
+
+  async function saveActuals(nextMap) {
+    localStorage.setItem(actualsKey, JSON.stringify(nextMap));
+    window.dispatchEvent(new Event("pfc:storage"));
+
+    if (entryMode === "local") return;
+
+    try {
+      await saveProgramState(programKey, { actualsByMonth: nextMap });
+    } catch (e) {
+      console.error("Failed to save actuals:", e);
+    }
+  }
+
+  function setActualsForMonth(m, value) {
+    const next = { ...actualsDraft, [m]: Number(value ?? 0) };
+    setActualsDraft(next);
+  }
+
+  function applyActualsDraft() {
+    saveActuals(actualsDraft);
+  }
+
+  function setAnnualActualsEvenly(annual) {
+    const n = Number(annual ?? 0);
+    const perMonth = n / 12;
+    const next = Object.fromEntries(MONTHS.map((m) => [m, perMonth]));
+    setActualsDraft(next);
+    saveActuals(next);
   }
 
 
@@ -2097,8 +2178,15 @@ export default function TrendsPage({
 
     // Variance vs Budget (actual vs target)
   const variance = useMemo(() => {
+    const hasActuals = MONTHS.some((m) => Number(snapshot.actualsByMonth?.[m] ?? 0) > 0);
+
     const actual = Object.fromEntries(
-      MONTHS.map((m) => [m, Number(byMonth?.[m]?.total ?? 0)])
+      MONTHS.map((m) => [
+        m,
+        hasActuals
+          ? Number(snapshot.actualsByMonth?.[m] ?? 0)
+          : Number(byMonth?.[m]?.total ?? 0),
+      ])
     );
 
     const budget = Object.fromEntries(
@@ -2144,7 +2232,7 @@ export default function TrendsPage({
         diffPct: diffPctSel,
       },
     };
-  }, [byMonth, snapshot.budgetByMonth, visibleMonths]);
+  }, [byMonth, snapshot.actualsByMonth, snapshot.budgetByMonth, visibleMonths]);
 
   // Cumulative burn curve (actual + optional budget)
   const burnCurve = useMemo(() => {
@@ -2155,7 +2243,10 @@ export default function TrendsPage({
     let b = 0;
 
     for (const m of MONTHS) {
-      a += Number(byMonth?.[m]?.total ?? 0);
+      const actualValue = MONTHS.some((x) => Number(snapshot.actualsByMonth?.[x] ?? 0) > 0)
+        ? Number(snapshot.actualsByMonth?.[m] ?? 0)
+        : Number(byMonth?.[m]?.total ?? 0);
+      a += actualValue;
       actualCum[m] = a;
 
       // budget is optional; if not set, it stays 0
@@ -2164,7 +2255,7 @@ export default function TrendsPage({
     }
 
     return { actualCum, budgetCum };
-  }, [byMonth, snapshot.budgetByMonth]);
+  }, [byMonth, snapshot.actualsByMonth, snapshot.budgetByMonth]);
   
   
   // Spend momentum (Δ month-over-month)
@@ -2352,7 +2443,10 @@ export default function TrendsPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm">
+              {loading ? "Refreshing..." : `Data as of ${refreshedLabel}`}
+            </div>
             <button
               type="button"
               onClick={onBack}
@@ -2431,7 +2525,7 @@ export default function TrendsPage({
         {/* KPI cards */}
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Total spend (selected months)"
+            title="Tracked spend (selected months)"
             value={fmt(sums.grandTotal)}
             sub={`${visibleMonths.length} months • Run rate ${fmt(
               sums.runRate
@@ -2450,216 +2544,401 @@ export default function TrendsPage({
           />
         </div>
 
-        {/* What changed this month? */}
-        <div className="mt-6">
-          <InsightCard
-            title="Biggest spike/drop in selected range"
-            sub={viewLabel}   // this already changes with your slider
-            items={whatChanged.insights}
-            whyDetails={whatChanged.whyDetails}
-          />
-        </div>
-
-        {/* Run rate forecast projection (year-end) */}
-        <div className="mt-6">
-          <RunRateProjectionChart
-            monthsAll={MONTHS}
-            visibleMonths={visibleMonths}
-            actualCumByMonth={runRateProjection.actualCum}
-            projCumByMonth={runRateProjection.projCum}
-            lowCumByMonth={runRateProjection.lowCum}
-            highCumByMonth={runRateProjection.highCum}
-            yearEnd={runRateProjection.yearEnd}
-          />
-        </div>
-
-        {/* Spend acceleration (Δ MoM) */}
-        <div className="mt-6">
-          <SpendMomentumChart
-            months={visibleMonths}
-            dTotalByMonth={spendDelta.dTotal}
-            dMsByMonth={spendDelta.dMs}
-            dNfByMonth={spendDelta.dNf}
-          />
-        </div>
-
-        {/* Variance vs Budget */}
-        <div className="mt-6">
-          <BudgetVarianceChart
-            months={visibleMonths}
-            actualByMonth={variance.actual}
-            budgetByMonth={variance.budget}
-            diffByMonth={variance.diff}
-            cumDiffByMonth={variance.cumDiff}
-            selected={variance.selected}
-          />
-        </div>
-
-         {/* Budget (optional) */}
-        <div className="mt-5 rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-sm font-extrabold text-gray-900">
-                Budget (optional)
-              </div>
-              <div className="mt-1 text-xs font-semibold text-gray-500">
-                Enter an annual budget (even split), or adjust months below.
-                Stored in localStorage per program.
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setAnnualBudgetEvenly(prompt("Enter annual budget") || 0)}
-                className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
-              >
-                Set annual (even split)
-              </button>
-              <button
-                type="button"
-                onClick={applyBudgetDraft}
-                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-              >
-                Save budget
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[760px] w-full text-left">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Month
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Budget
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {MONTHS.map((m) => (
-                  <tr key={m}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {m}
-                    </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="number"
-                        value={Number(budgetDraft?.[m] ?? 0)}
-                        onChange={(e) => setBudgetForMonth(m, e.target.value)}
-                        className="w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        
-        {/* Cumulative burn curve (bottom) */}
-        <div className="mt-6">
-          <CumulativeBurnCurve
-            monthsAll={MONTHS}
-            visibleMonths={visibleMonths}
-            actualCumByMonth={burnCurve.actualCum}
-            budgetCumByMonth={burnCurve.budgetCum}
-          />
-        </div>
-
-        {/* MS vs NF ratio drift (% over time) */}
-        <div className="mt-6">
-          <SplitDriftChart
-            months={visibleMonths}
-            msPctByMonth={splitPct.msPct}
-            nfPctByMonth={splitPct.nfPct}
-          />
-        </div>
-
-        {/* Stacked monthly spend */}
-        <div className="mt-6">
-          <StackedBars months={visibleMonths} series={stackedSeries} />
-        </div>
-
-        {/* MS vs NF line */}
-        <div className="mt-6">
-          <TwoLineChart
-            months={visibleMonths}
-            msByMonth={msByMonth}
-            nfByMonth={nfByMonth}
-          />
-        </div>
-
-        {/* Top contributors table */}
         <div className="mt-6 rounded-2xl border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-extrabold text-gray-900">
-                Top contributors
-              </div>
+              <div className="text-sm font-extrabold text-gray-900">Trend Views</div>
               <div className="mt-0.5 text-xs font-semibold text-gray-500">
-                Totals across selected months
+                Open one trend at a time for a cleaner executive review.
               </div>
             </div>
           </div>
 
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-[760px] w-full text-left">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Category
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Total
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    Avg / Month
-                  </th>
-                  <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
-                    % of Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {contributors.map((r) => (
-                  <tr key={r.label}>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {r.label}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                      {fmt(r.total)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {fmt(r.avgPerMonth)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-700">
-                      {pct(r.pctOfTotal)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    Grand Total
-                  </td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    {fmt(sums.grandTotal)}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    {fmt(sums.runRate)}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
-                    100%
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <TrendNavCard
+              title="Tracked spend projection"
+              summary={`${fmt(runRateProjection.yearEnd.projected)} projected tracked spend`}
+              meta={`Band ${fmt(runRateProjection.yearEnd.low)} – ${fmt(
+                runRateProjection.yearEnd.high
+              )}`}
+              active={activeTrend === "projection"}
+              onClick={() => setActiveTrend("projection")}
+            />
+            <TrendNavCard
+              title="Biggest spike/drop"
+              summary={
+                whatChanged.insights?.[0] ||
+                "Review the largest month-over-month movement in the selected range."
+              }
+              meta={viewLabel}
+              active={activeTrend === "spike"}
+              onClick={() => setActiveTrend("spike")}
+            />
+            <TrendNavCard
+              title="Spend acceleration"
+              summary={`Latest visible delta ${fmt(
+                Number(spendDelta.dTotal?.[visibleMonths[visibleMonths.length - 1]] ?? 0)
+              )}`}
+              meta="Month-over-month change"
+              active={activeTrend === "acceleration"}
+              onClick={() => setActiveTrend("acceleration")}
+            />
+            <TrendNavCard
+              title="Variance vs budget"
+              summary={`Variance ${fmt(variance.selected?.diff ?? 0)} across selected months`}
+              meta="Compares actuals to budget"
+              active={activeTrend === "variance"}
+              onClick={() => setActiveTrend("variance")}
+            />
+            <TrendNavCard
+              title="Budget & actuals inputs"
+              summary="Manage monthly actuals and budget entries"
+              meta="Updates variance and burn views"
+              active={activeTrend === "inputs"}
+              onClick={() => setActiveTrend("inputs")}
+            />
+            <TrendNavCard
+              title="Cumulative burn curve"
+              summary={`${fmt(
+                Number(
+                  burnCurve.actualCum?.[
+                    visibleMonths[visibleMonths.length - 1] || MONTHS[MONTHS.length - 1]
+                  ] ?? 0
+                )
+              )} cumulative`}
+              meta="Actual vs optional budget"
+              active={activeTrend === "burn"}
+              onClick={() => setActiveTrend("burn")}
+            />
+            <TrendNavCard
+              title="MS vs NF ratio drift"
+              summary={`${pct(
+                splitPct.msPct?.[
+                  visibleMonths[visibleMonths.length - 1] || MONTHS[MONTHS.length - 1]
+                ] ?? 0
+              )} MS • ${pct(
+                splitPct.nfPct?.[
+                  visibleMonths[visibleMonths.length - 1] || MONTHS[MONTHS.length - 1]
+                ] ?? 0
+              )} NF`}
+              meta="Mix shift over time"
+              active={activeTrend === "drift"}
+              onClick={() => setActiveTrend("drift")}
+            />
+            <TrendNavCard
+              title="Monthly tracked spend"
+              summary={`${visibleMonths.length} visible months stacked by source`}
+              meta="Tools + External"
+              active={activeTrend === "monthly"}
+              onClick={() => setActiveTrend("monthly")}
+            />
+            <TrendNavCard
+              title="MS vs NF over time"
+              summary={`${pct(msShare)} MS • ${pct(nfShare)} NF in range`}
+              meta="Monthly line comparison"
+              active={activeTrend === "split"}
+              onClick={() => setActiveTrend("split")}
+            />
+            <TrendNavCard
+              title="Top contributors"
+              summary={
+                contributors[0]
+                  ? `${contributors[0].label} leads the selected range`
+                  : "Contribution ranking"
+              }
+              meta={contributors[0] ? fmt(contributors[0].total) : "No data"}
+              active={activeTrend === "contributors"}
+              onClick={() => setActiveTrend("contributors")}
+            />
           </div>
+        </div>
+
+        <div className="mt-6">
+          {activeTrend === "projection" ? (
+            <RunRateProjectionChart
+              monthsAll={MONTHS}
+              visibleMonths={visibleMonths}
+              actualCumByMonth={runRateProjection.actualCum}
+              projCumByMonth={runRateProjection.projCum}
+              lowCumByMonth={runRateProjection.lowCum}
+              highCumByMonth={runRateProjection.highCum}
+              yearEnd={runRateProjection.yearEnd}
+            />
+          ) : null}
+
+          {activeTrend === "spike" ? (
+            <InsightCard
+              title="Biggest spike/drop in selected range"
+              sub={viewLabel}
+              items={whatChanged.insights}
+              whyDetails={whatChanged.whyDetails}
+            />
+          ) : null}
+
+          {activeTrend === "acceleration" ? (
+            <SpendMomentumChart
+              months={visibleMonths}
+              dTotalByMonth={spendDelta.dTotal}
+              dMsByMonth={spendDelta.dMs}
+              dNfByMonth={spendDelta.dNf}
+            />
+          ) : null}
+
+          {activeTrend === "variance" ? (
+            <BudgetVarianceChart
+              months={visibleMonths}
+              actualByMonth={variance.actual}
+              budgetByMonth={variance.budget}
+              diffByMonth={variance.diff}
+              cumDiffByMonth={variance.cumDiff}
+              selected={variance.selected}
+            />
+          ) : null}
+
+          {activeTrend === "inputs" ? (
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-extrabold text-blue-950">
+                      Comparison inputs
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-blue-900/80">
+                      Forecast is not entered or saved in this panel. It is derived live from the
+                      saved Internal, Tools &amp; Services, and External entries for the selected
+                      program. This view is only for entering the two comparison baselines used in
+                      Trends:
+                      <span className="font-extrabold"> Actuals</span> and
+                      <span className="font-extrabold"> Budget</span>.
+                    </div>
+                    <div className="mt-2 text-xs font-semibold text-blue-900/70">
+                      Forecast source: current saved program data. Actuals source: manual monthly
+                      entry. Budget source: manual monthly target baseline.
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-blue-900">
+                    Forecast is derived live
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-2">
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-extrabold text-gray-900">
+                      Actuals inputs
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-gray-500">
+                      Enter actual monthly spend as it occurs. These values are saved as the
+                      month-by-month actual baseline for variance and cumulative burn comparisons.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAnnualActualsEvenly(prompt("Enter annual actuals") || 0)}
+                      className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+                    >
+                      Set annual (even split)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyActualsDraft}
+                      className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                    >
+                      Save actuals
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-[420px] w-full text-left">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Month</th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Actuals</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {MONTHS.map((m) => (
+                        <tr key={`actual-${m}`}>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">{m}</td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={Number(actualsDraft?.[m] ?? 0)}
+                              onChange={(e) => setActualsForMonth(m, e.target.value)}
+                              className="w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-extrabold text-gray-900">
+                      Budget baseline
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-gray-500">
+                      Enter the planned monthly budget target used as the comparison baseline. This
+                      is saved separately from the forecast and remains independent from the live
+                      calculated forecast.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAnnualBudgetEvenly(prompt("Enter annual budget") || 0)}
+                      className="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100"
+                    >
+                      Set annual (even split)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyBudgetDraft}
+                      className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                    >
+                      Save budget
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-[420px] w-full text-left">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Month</th>
+                        <th className="px-4 py-3 text-xs font-extrabold text-gray-700">Budget target</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {MONTHS.map((m) => (
+                        <tr key={`budget-${m}`}>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">{m}</td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              value={Number(budgetDraft?.[m] ?? 0)}
+                              onChange={(e) => setBudgetForMonth(m, e.target.value)}
+                              className="w-48 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-900"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTrend === "burn" ? (
+            <CumulativeBurnCurve
+              monthsAll={MONTHS}
+              visibleMonths={visibleMonths}
+              actualCumByMonth={burnCurve.actualCum}
+              budgetCumByMonth={burnCurve.budgetCum}
+            />
+          ) : null}
+
+          {activeTrend === "drift" ? (
+            <SplitDriftChart
+              months={visibleMonths}
+              msPctByMonth={splitPct.msPct}
+              nfPctByMonth={splitPct.nfPct}
+            />
+          ) : null}
+
+          {activeTrend === "monthly" ? (
+            <StackedBars months={visibleMonths} series={stackedSeries} />
+          ) : null}
+
+          {activeTrend === "split" ? (
+            <TwoLineChart
+              months={visibleMonths}
+              msByMonth={msByMonth}
+              nfByMonth={nfByMonth}
+            />
+          ) : null}
+
+          {activeTrend === "contributors" ? (
+            <div className="rounded-2xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-extrabold text-gray-900">
+                    Top contributors
+                  </div>
+                  <div className="mt-0.5 text-xs font-semibold text-gray-500">
+                    Totals across selected months
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-[760px] w-full text-left">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        Avg / Month
+                      </th>
+                      <th className="px-4 py-3 text-xs font-extrabold text-gray-700">
+                        % of Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {contributors.map((r) => (
+                      <tr key={r.label}>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {r.label}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                          {fmt(r.total)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {fmt(r.avgPerMonth)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-700">
+                          {pct(r.pctOfTotal)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        Grand Total
+                      </td>
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        {fmt(sums.grandTotal)}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        {fmt(sums.runRate)}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-extrabold text-gray-900">
+                        100%
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="h-10" />

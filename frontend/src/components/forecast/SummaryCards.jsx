@@ -12,7 +12,12 @@ import ToolsServicesDetails from "./ToolsServicesDetails";
 import { addAutoLogEntry } from "./autoLogStore";
 
 // ✅ Firestore helpers (shared program docs)
-import { loadProgramState, saveProgramState } from "../../data/firestorePrograms";
+import {
+  loadLocalProgramState,
+  loadProgramState,
+  saveLocalProgramState,
+  saveProgramState,
+} from "../../data/firestorePrograms";
 
 // ✅ Step 3: Excel import modal
 import ImportExcelModal from "./ImportExcelModal";
@@ -82,6 +87,27 @@ function formatBeforeAfter(before, after) {
   return b === a ? `${a}` : `${b} → ${a}`;
 }
 
+function formatLogValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "object") {
+    if ("msPct" in value || "nfPct" in value) {
+      const ms = Number(value?.msPct ?? 0);
+      const nf = Number(value?.nfPct ?? 0);
+      return `MS ${ms}% / NF ${nf}%`;
+    }
+
+    try {
+      return Object.entries(value)
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(" • ");
+    } catch {
+      return "";
+    }
+  }
+
+  return String(value);
+}
+
 /**
  * Convert component onLog() payloads into AutoLog entries.
  * IMPORTANT: Do NOT require payload.kind. Your components don't send it.
@@ -96,7 +122,7 @@ function payloadToAutoDetails(payload) {
   const field = payload.field ? ` ${payload.field}` : "";
   const change =
     payload.from !== undefined || payload.to !== undefined
-      ? `: ${formatBeforeAfter(payload.from, payload.to)}`
+      ? `: ${formatBeforeAfter(formatLogValue(payload.from), formatLogValue(payload.to))}`
       : "";
 
   const out = `${name}${field}${change}`.trim();
@@ -150,7 +176,7 @@ const PROGRAM_OPTIONS = [
 /* =========================================================
    Main
    ========================================================= */
-export default function SummaryCards({ selectedProgram, onProgramChange }) {
+export default function SummaryCards({ selectedProgram, onProgramChange, entryMode }) {
   const programKey = selectedProgram || "connected";
 
   // Global keys
@@ -209,6 +235,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       .map((r) => ({
         id: crypto.randomUUID(),
         name: String(r.name ?? r["FTE Name"] ?? "").trim(),
+        role: String(r.role ?? r["Role"] ?? "").trim(),
         runPct: clampPct(r.runPct ?? r["Run %"] ?? 0),
         growthPct: clampPct(
           r.growPct ?? r.growthPct ?? r["Grow %"] ?? r["Growth %"] ?? 0
@@ -248,6 +275,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     const nextContractors = (p.contractors || [])
       .map((r) => {
         const name = String(r.name ?? r["Contractor Name"] ?? "").trim();
+        const role = String(r.role ?? r["Role"] ?? "").trim();
 
         const ratePerHour = toNum(r.ratePerHour ?? r["Rate Per Hour"] ?? 0);
         const hoursPerWeek = toNum(r.hoursPerWeek ?? r["Hours Per Week"] ?? 0);
@@ -267,6 +295,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         return {
           id: crypto.randomUUID(),
           name,
+          role,
           ratePerHour,
           hoursPerWeek,
           weeksPerYear,
@@ -288,6 +317,8 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       .map((r) => {
         const name = String(r.name ?? r["SOW Name"] ?? "").trim();
         const yearTargetTotal = toNum(r.yearTotal ?? r["Total Per Year"] ?? 0);
+        const developersCount = r.totalDevelopers ?? r["Developers Count"] ?? null;
+        const qaCount = r.totalQa ?? r["QA Count"] ?? null;
 
         const split = normalizeSplit(
           r.msPct ?? r["MS %"] ?? 0,
@@ -301,6 +332,14 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
           id: crypto.randomUUID(),
           name,
           yearTargetTotal,
+          totalDevelopers:
+            developersCount === null || developersCount === undefined || developersCount === ""
+              ? null
+              : toNum(developersCount),
+          totalQa:
+            qaCount === null || qaCount === undefined || qaCount === ""
+              ? null
+              : toNum(qaCount),
           msPct: split.msPct,
           nfPct: split.nfPct,
           msByMonth: distributeEvenly(msYear),
@@ -365,7 +404,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       try {
         setIsHydrating(true);
 
-        const remoteState = await loadProgramState(programKey);
+        const remoteState =
+          entryMode === "local"
+            ? loadLocalProgramState(programKey)
+            : await loadProgramState(programKey);
 
         if (cancelled) return;
 
@@ -420,7 +462,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     return () => {
       cancelled = true;
     };
-  }, [programKey]);
+  }, [programKey, entryMode]);
 
   // ✅ Step 6C: Save program data to Firestore when data changes (debounced)
   useEffect(() => {
@@ -435,6 +477,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
         tnsItems,
         tnsChangeLog,
       };
+
+      if (entryMode === "local") {
+        saveLocalProgramState(programKey, stateToSave);
+        return;
+      }
 
       saveProgramState(programKey, stateToSave).catch((e) => {
         console.error("Failed to save Firestore program state:", e);
@@ -451,6 +498,7 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
     tnsItems,
     tnsChangeLog,
     isHydrating,
+    entryMode,
   ]);
 
   // ✅ NEW: immediate save helper for "Update" buttons in details pages
@@ -466,9 +514,13 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
       tnsChangeLog,
     };
 
-    saveProgramState(programKey, stateToSave).catch((e) => {
-      console.error("Failed to save Firestore program state (commitNow):", e);
-    });
+    if (entryMode === "local") {
+      saveLocalProgramState(programKey, stateToSave);
+    } else {
+      saveProgramState(programKey, stateToSave).catch((e) => {
+        console.error("Failed to save Firestore program state (commitNow):", e);
+      });
+    }
 
     addAutoLogEntry({
       program: programKey,
@@ -768,12 +820,29 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
               </div>
 
               <div className="mt-6 border-t pt-6">
-                <InternalLabor
-                  mode="details"
-                  items={internalLaborItems}
-                  setItems={setInternalLaborItems}
-                  onLog={logInternal}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">Internal Labor FTE Details</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {internalLaborItems.length} {internalLaborItems.length === 1 ? "saved entry" : "saved entries"} • Expand to manage the full internal staffing detail
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <InternalLabor
+                      mode="details"
+                      items={internalLaborItems}
+                      setItems={setInternalLaborItems}
+                      onLog={logInternal}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
           ) : null}
@@ -788,17 +857,36 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   rows={tnsMonthlyRows}
                   showMonthFilter={true}
                   executiveSummary={true}
+                  summaryMetricLabel="Total Tools"
+                  summaryMetricValue={tnsItems.length}
                 />
               </div>
 
               <div className="mt-6 border-t pt-6">
-                <ToolsServicesDetails
-                  programKey={programKey}
-                  items={tnsItems}
-                  setItems={setTnsItems}
-                  onLog={logTns}
-                  onCommitNow={() => commitNow("tools")}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">Tools & Services Details</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {(tnsItems || []).length} {(tnsItems || []).length === 1 ? "saved entry" : "saved entries"} • Expand to manage the full tools section
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <ToolsServicesDetails
+                      programKey={programKey}
+                      items={tnsItems}
+                      setItems={setTnsItems}
+                      onLog={logTns}
+                      onCommitNow={() => commitNow("tools")}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
           ) : null}
@@ -812,25 +900,61 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                   rows={externalMonthlyRows}
                   showMonthFilter={true}
                   executiveSummary={true}
+                  summaryMetricLabel="Contractors + SOWs"
+                  summaryMetricValue={contractors.length + sows.length}
                 />
               </div>
 
               <div className="mt-6 border-t pt-6 space-y-6">
-                <ExternalContractorsDetails
-                  programKey={programKey}
-                  contractors={contractors}
-                  setContractors={setContractors}
-                  onLog={logExternal}
-                  onCommitNow={() => commitNow("external")}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">External Details — Contractors</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {(contractors || []).length} {(contractors || []).length === 1 ? "saved entry" : "saved entries"} • Expand to manage contractor details
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <ExternalContractorsDetails
+                      programKey={programKey}
+                      contractors={contractors}
+                      setContractors={setContractors}
+                      onLog={logExternal}
+                      onCommitNow={() => commitNow("external")}
+                    />
+                  </div>
+                </details>
 
-                <ExternalSowDetails
-                  programKey={programKey}
-                  sows={sows}
-                  setSows={setSows}
-                  onLog={logExternal}
-                  onCommitNow={() => commitNow("external")}
-                />
+                <details className="group rounded-2xl border border-gray-200 bg-white/70 p-3 shadow-sm" open={false}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-gray-50">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900">External Details — SOW</div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {(sows || []).length} {(sows || []).length === 1 ? "saved entry" : "saved entries"} • Expand to manage SOW details
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                      <span className="group-open:hidden">Open section</span>
+                      <span className="hidden group-open:inline">Hide section</span>
+                      <span className="text-sm transition-transform duration-200 group-open:rotate-180">▾</span>
+                    </div>
+                  </summary>
+                  <div className="mt-4">
+                    <ExternalSowDetails
+                      programKey={programKey}
+                      sows={sows}
+                      setSows={setSows}
+                      onLog={logExternal}
+                      onCommitNow={() => commitNow("external")}
+                    />
+                  </div>
+                </details>
               </div>
             </div>
           ) : null}
@@ -857,7 +981,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
               );
 
               if (stateToSave) {
-                await saveProgramState(pk, stateToSave);
+                if (entryMode === "local") {
+                  saveLocalProgramState(pk, stateToSave);
+                } else {
+                  await saveProgramState(pk, stateToSave);
+                }
               }
               continue;
             }
@@ -870,7 +998,10 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
 
             if (!imported) continue;
 
-            const existing = (await loadProgramState(pk)) || {};
+            const existing =
+              entryMode === "local"
+                ? loadLocalProgramState(pk) || {}
+                : (await loadProgramState(pk)) || {};
 
             const merged = {
               internalLaborItems: mergeByName(
@@ -901,7 +1032,11 @@ export default function SummaryCards({ selectedProgram, onProgramChange }) {
                 : [],
             };
 
-            await saveProgramState(pk, merged);
+            if (entryMode === "local") {
+              saveLocalProgramState(pk, merged);
+            } else {
+              await saveProgramState(pk, merged);
+            }
           }
 
           setImportOpen(false);
